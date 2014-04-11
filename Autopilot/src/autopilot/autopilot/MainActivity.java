@@ -6,6 +6,7 @@ import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
 import ioio.lib.util.android.IOIOActivity;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -13,6 +14,7 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.LinearLayout;
 import android.widget.ToggleButton;
 
@@ -27,32 +29,72 @@ public class MainActivity extends IOIOActivity {
 	// private data members
 	//=========================================================================
 	
+	//-----------------------------------------------------------------------
 	// sensors
+	//-----------------------------------------------------------------------
+	
 	private SensorManager sensorManager;
+	
 	private Sensor gyro = null;
 	private Sensor rotationSensor = null;
+	private Sensor barometer = null;
 	
+	//-----------------------------------------------------------------------
 	// UI elements
+	//-----------------------------------------------------------------------
+	
 	private ToggleButton button;
 	
+	//-----------------------------------------------------------------------
 	// graphs
+	//-----------------------------------------------------------------------
+	
 	private final Handler graphHandler = new Handler();
 	private Runnable graphTimer;
 	
 	private LineGraphView pitchGraph;
 	private GraphViewSeries pitchGraphSeries;
 	
-	// tuning parameters
-	private double Ts = 0.01; // (estimate)
-	private double alphaGyro = Math.exp(-5 * 2*Math.PI * Ts);
-	private double sigmaPitchFilter = 0.5;
+	private LineGraphView pitchRateGraph;
+	private GraphViewSeries pitchRateGraphSeries;
 	
+	private LineGraphView altitudeGraph;
+	private GraphViewSeries altitudeGraphSeries;
+	
+	//-----------------------------------------------------------------------
+	// tuning parameters
+	//-----------------------------------------------------------------------
+	
+	// common
+	private int sensorSampleTimeUs = 10000;
+	private double sensorSampleTimeS = sensorSampleTimeUs / 1.0e6; 
+	
+	// pitch and pitch rate
+	private double gyroLPFCuttoffFrequency = 2.0;
+	private double alphaGyroLPF = Math.exp(-gyroLPFCuttoffFrequency * 2*Math.PI * sensorSampleTimeS);
+	private double sigmaPitchFilter = 0.7;
+	
+	// altitude
+	private float barometerLPFCuttoffFrequency = 1.0f;
+	private float alphaBarometerLPF = (float) Math.exp(-barometerLPFCuttoffFrequency * 2*Math.PI * sensorSampleTimeS);
+	
+	//-----------------------------------------------------------------------
 	// values
-	private double pitch;
-	private double pitchRate;
-	private double rawPitchRate;
-	private double rawIntegratedPitch;
-	private double rawRotationSensorPitch;
+	//-----------------------------------------------------------------------
+	
+	// pitch and pitch rate
+	private double pitch = 0.0; // rad
+	private double pitchRate = 0.0; // rad/s
+	private double rawPitchRate = 0.0; // rad/s
+	private double rawPitchIntegrated = 0.0; // rad
+	private double rawPitchRotationSensor = 0.0; // rad
+	
+	// altitude
+	private float barometer0 = SensorManager.PRESSURE_STANDARD_ATMOSPHERE;
+	private float barometerRaw = SensorManager.PRESSURE_STANDARD_ATMOSPHERE; // hPa
+	private float barometerLPF = SensorManager.PRESSURE_STANDARD_ATMOSPHERE; // hPa
+	private double altitude0;
+	private double altitude; // m
 	
 	//=========================================================================
 	// Android activity
@@ -62,6 +104,7 @@ public class MainActivity extends IOIOActivity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
+		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 		
 		button = (ToggleButton) findViewById(R.id.toggle_button);
 		
@@ -74,17 +117,51 @@ public class MainActivity extends IOIOActivity {
 		if (sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null)
         	rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
 		
-		// graphs
+		if (sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) != null)
+		{
+			barometer = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
+			Log.i("Sensors", String.format("Barometer found: %s", barometer.getName()));
+		}
+		else
+		{
+			Log.w("Sensors", "Barometer not found!");
+		}
+		
+		// pitch graph
 		pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
 		pitchGraph = new LineGraphView(this, "Pitch");
 		pitchGraph.addSeries(pitchGraphSeries);
 		pitchGraph.setViewPort(0, 30);
 		pitchGraph.setScalable(true);
 		pitchGraph.getGraphViewStyle().setNumHorizontalLabels(2);
-		pitchGraph.getGraphViewStyle().setVerticalLabelsWidth(30);
+		pitchGraph.getGraphViewStyle().setVerticalLabelsWidth(60);
 		
 		LinearLayout pitchGraphLayout = (LinearLayout) findViewById(R.id.pitch_graph);
 		pitchGraphLayout.addView(pitchGraph);
+		
+		// pitch rate graph
+		pitchRateGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
+		pitchRateGraph = new LineGraphView(this, "Pitch Rate");
+		pitchRateGraph.addSeries(pitchRateGraphSeries);
+		pitchRateGraph.setViewPort(0, 30);
+		pitchRateGraph.setScalable(true);
+		pitchRateGraph.getGraphViewStyle().setNumHorizontalLabels(2);
+		pitchRateGraph.getGraphViewStyle().setVerticalLabelsWidth(60);
+		
+		LinearLayout pitchRateGraphLayout = (LinearLayout) findViewById(R.id.pitch_rate_graph);
+		pitchRateGraphLayout.addView(pitchRateGraph);
+		
+		// altitude graph
+		altitudeGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
+		altitudeGraph = new LineGraphView(this, "Altitude");
+		altitudeGraph.addSeries(altitudeGraphSeries);
+		altitudeGraph.setViewPort(0, 30);
+		altitudeGraph.setScalable(true);
+		altitudeGraph.getGraphViewStyle().setNumHorizontalLabels(2);
+		altitudeGraph.getGraphViewStyle().setVerticalLabelsWidth(60);
+
+		LinearLayout altitudeGraphLayout = (LinearLayout) findViewById(R.id.altitude_graph);
+		altitudeGraphLayout.addView(altitudeGraph);
 	}
 	
 	@Override
@@ -94,16 +171,21 @@ public class MainActivity extends IOIOActivity {
     	
     	// sensors
     	if (gyro != null)
-    		sensorManager.registerListener(listener, gyro, SensorManager.SENSOR_DELAY_FASTEST);
+    		sensorManager.registerListener(listener, gyro, sensorSampleTimeUs);
     	
     	if (rotationSensor != null)
-    		sensorManager.registerListener(listener, rotationSensor, SensorManager.SENSOR_DELAY_FASTEST);
+    		sensorManager.registerListener(listener, rotationSensor, sensorSampleTimeUs);
+    	
+    	if (barometer != null)
+    		sensorManager.registerListener(listener, barometer, sensorSampleTimeUs);
     	
     	// graphs
     	graphTimer = new Runnable() {
     		@Override
     		public void run() {
     			pitchGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, pitch * 180 / Math.PI), true, 1000);
+    			pitchRateGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, pitchRate * 180 / Math.PI), true, 1000);
+    			altitudeGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, altitude), true, 1000);
     			graphHandler.postDelayed(this, 100);
     		}
     	};
@@ -168,6 +250,10 @@ public class MainActivity extends IOIOActivity {
 
 	private SensorEventListener listener = new SensorEventListener()
 	{
+		private long lastGyroTime = SystemClock.elapsedRealtime();
+		
+		private boolean barometerInitialized = false;
+		
 		@Override
 		public void onAccuracyChanged(Sensor sensor, int accuracy) {}
 
@@ -176,7 +262,14 @@ public class MainActivity extends IOIOActivity {
 
 			if (event.sensor == gyro)
 			{
-				// TODO process
+				rawPitchRate = event.values[0];
+				pitchRate = alphaGyroLPF*pitchRate + (1 - alphaGyroLPF)* rawPitchRate;
+				
+				long time = SystemClock.elapsedRealtime();
+				double delta_t = (time - lastGyroTime) / 1.0e3;
+				lastGyroTime = time;
+				
+				rawPitchIntegrated = rawPitchIntegrated + delta_t * rawPitchRate;
 			}
 			else if (event.sensor == rotationSensor)
 			{
@@ -186,8 +279,28 @@ public class MainActivity extends IOIOActivity {
 				float values[] = new float[3];
 				SensorManager.getOrientation(R, values);
 
-				pitch = -values[1];
+				rawPitchRotationSensor = -values[1];
 			}
+			else if (event.sensor == barometer)
+			{
+				if (!barometerInitialized)
+				{
+					barometer0 = event.values[0];
+					barometerLPF = event.values[0];
+					
+					altitude0 = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, barometer0);
+					
+					barometerInitialized = true;
+				}
+				
+				barometerRaw = event.values[0];
+				barometerLPF = alphaBarometerLPF*barometerLPF + (1 - alphaBarometerLPF)*barometerRaw;
+				
+				double currAltitude = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, barometerLPF);
+				altitude = currAltitude - altitude0;
+			}
+			
+			pitch = sigmaPitchFilter*rawPitchRotationSensor + (1-sigmaPitchFilter)*rawPitchIntegrated;
 		}
 	};
 }
