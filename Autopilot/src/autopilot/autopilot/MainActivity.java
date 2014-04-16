@@ -5,7 +5,11 @@ import ioio.lib.api.exception.ConnectionLostException;
 import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
 import ioio.lib.util.android.IOIOActivity;
+import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -14,6 +18,7 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
+import android.telephony.SmsMessage;
 import android.util.Log;
 import android.widget.LinearLayout;
 import android.widget.ToggleButton;
@@ -96,6 +101,11 @@ public class MainActivity extends IOIOActivity {
 	private double altitude0;
 	private double altitude; // m
 	
+	//-----------------------------------------------------------------------
+	// sms receiver
+	//-----------------------------------------------------------------------
+	private String SMS_ACTION = android.provider.Telephony.Sms.Intents.SMS_RECEIVED_ACTION;
+	
 	//=========================================================================
 	// Android activity
 	//=========================================================================
@@ -105,6 +115,11 @@ public class MainActivity extends IOIOActivity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+		
+		// SMS
+		IntentFilter filter = new IntentFilter(SMS_ACTION);
+		filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY - 1);
+		registerReceiver(smsReceiver, filter);
 		
 		button = (ToggleButton) findViewById(R.id.toggle_button);
 		
@@ -128,7 +143,7 @@ public class MainActivity extends IOIOActivity {
 		}
 		
 		// pitch graph
-		pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
+		/*pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
 		pitchGraph = new LineGraphView(this, "Pitch");
 		pitchGraph.addSeries(pitchGraphSeries);
 		pitchGraph.setViewPort(0, 30);
@@ -161,7 +176,7 @@ public class MainActivity extends IOIOActivity {
 		altitudeGraph.getGraphViewStyle().setVerticalLabelsWidth(60);
 
 		LinearLayout altitudeGraphLayout = (LinearLayout) findViewById(R.id.altitude_graph);
-		altitudeGraphLayout.addView(altitudeGraph);
+		altitudeGraphLayout.addView(altitudeGraph);*/
 	}
 	
 	@Override
@@ -180,7 +195,7 @@ public class MainActivity extends IOIOActivity {
     		sensorManager.registerListener(listener, barometer, sensorSampleTimeUs);
     	
     	// graphs
-    	graphTimer = new Runnable() {
+    	/*graphTimer = new Runnable() {
     		@Override
     		public void run() {
     			pitchGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, pitch * 180 / Math.PI), true, 1000);
@@ -189,14 +204,14 @@ public class MainActivity extends IOIOActivity {
     			graphHandler.postDelayed(this, 100);
     		}
     	};
-    	graphHandler.post(graphTimer);
+    	graphHandler.post(graphTimer);*/
     }
     
     @Override
     protected void onPause()
     {	
     	// sensors
-    	sensorManager.unregisterListener(listener);
+    	//sensorManager.unregisterListener(listener);
     	
     	// graphs
     	graphHandler.removeCallbacks(graphTimer);
@@ -303,4 +318,42 @@ public class MainActivity extends IOIOActivity {
 			pitch = sigmaPitchFilter*rawPitchRotationSensor + (1-sigmaPitchFilter)*rawPitchIntegrated;
 		}
 	};
+	
+	
+	private final BroadcastReceiver smsReceiver = new BroadcastReceiver()
+	{
+		@Override
+		public void onReceive(Context context, Intent intent)
+		{
+			if (intent.getAction().equals(SMS_ACTION))
+			{
+				Bundle pudsBundle = intent.getExtras();
+				Object[] pdus = (Object[]) pudsBundle.get("pdus");
+				SmsMessage message = SmsMessage.createFromPdu((byte[]) pdus[0]);
+				String data = message.getMessageBody();
+
+				if (data != null)
+				{
+					String[] lines = data.split("\n");
+
+					if (lines[0].equals(context.getString(R.string.prefix)))
+					{
+						abortBroadcast();
+						String body = data.substring(lines[0].length() + 1);
+						displaySMSAlert(body);
+					}
+				}
+			}
+		}
+	};
+	
+	private void displaySMSAlert(String data)
+	{
+		AlertDialog.Builder builder = new AlertDialog.Builder(this);
+		builder.setTitle("Message Intercepted!");
+		builder.setMessage(data);
+
+		AlertDialog dialog = builder.create();
+		dialog.show();
+	}
 }
