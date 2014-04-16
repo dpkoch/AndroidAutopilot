@@ -91,6 +91,10 @@ public class MainActivity extends IOIOActivity {
 	// values
 	//-----------------------------------------------------------------------
 	
+	// roll and roll rate
+	private double rollRateRaw;
+	private double rollRate;
+	
 	// pitch and pitch rate
 	private double pitch = 0.0; // rad
 	private double pitchRate = 0.0; // rad/s
@@ -130,8 +134,8 @@ public class MainActivity extends IOIOActivity {
 	private PID altitudeToPitch;
 	private PID airspeedToThrottle;
 	
-	private double tunningCommand = 0;
-	private int currentlyTunning = 0;
+	private double tuningCommand = 0;
+	private int currentlyTuning = 0;
 	
 	//-----------------------------------------------------------------------
 	// sms receiver
@@ -166,7 +170,10 @@ public class MainActivity extends IOIOActivity {
 		sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 		
 		if (sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null)
+		{
         	gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        	Log.i("Sensors", String.format("Gyroscope found: %s", gyro.getName()));
+		}
 		
 		if (sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) != null)
 		{
@@ -188,7 +195,7 @@ public class MainActivity extends IOIOActivity {
         valuesMagneticField = new float[3];
 		
 		// pitch graph
-		/*pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
+		pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
 		pitchGraph = new LineGraphView(this, "Pitch");
 		pitchGraph.addSeries(pitchGraphSeries);
 		pitchGraph.setViewPort(0, 30);
@@ -212,7 +219,7 @@ public class MainActivity extends IOIOActivity {
 		pitchRateGraphLayout.addView(pitchRateGraph);
 		
 		// altitude graph
-		altitudeGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
+		/*altitudeGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
 		altitudeGraph = new LineGraphView(this, "Altitude");
 		altitudeGraph.addSeries(altitudeGraphSeries);
 		altitudeGraph.setViewPort(0, 30);
@@ -231,35 +238,35 @@ public class MainActivity extends IOIOActivity {
     	
     	// sensors
     	if (gyro != null)
-    		sensorManager.registerListener(listener, gyro, sensorSampleTimeUs);
+    		sensorManager.registerListener(sensorListener, gyro, sensorSampleTimeUs);
     	
     	if (barometer != null)
-    		sensorManager.registerListener(listener, barometer, sensorSampleTimeUs);
+    		sensorManager.registerListener(sensorListener, barometer, sensorSampleTimeUs);
     	
     	if (accel != null)
-    		sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_FASTEST);
+    		sensorManager.registerListener(sensorListener, accel, sensorSampleTimeUs);
     	
     	if (magnetometer != null)
-    		sensorManager.registerListener(listener, magnetometer, SensorManager.SENSOR_DELAY_FASTEST);
+    		sensorManager.registerListener(sensorListener, magnetometer, sensorSampleTimeUs);
     	
     	// graphs
-    	/*graphTimer = new Runnable() {
+    	graphTimer = new Runnable() {
     		@Override
     		public void run() {
-    			pitchGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, pitch * 180 / Math.PI), true, 1000);
-    			pitchRateGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, pitchRate * 180 / Math.PI), true, 1000);
-    			altitudeGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, altitude), true, 1000);
+    			pitchGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, Math.toDegrees(rollRawValue)), true, 1000);
+    			pitchRateGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, Math.toDegrees(rollRate)), true, 1000);
+//    			altitudeGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, altitude), true, 1000);
     			graphHandler.postDelayed(this, 100);
     		}
     	};
-    	graphHandler.post(graphTimer);*/
+    	graphHandler.post(graphTimer);
     }
     
     @Override
     protected void onPause()
     {	
     	// sensors
-    	//sensorManager.unregisterListener(listener);
+    	sensorManager.unregisterListener(sensorListener);
     	
     	// graphs
     	graphHandler.removeCallbacks(graphTimer);
@@ -277,7 +284,7 @@ public class MainActivity extends IOIOActivity {
 	class Looper extends BaseIOIOLooper {
 		
 		private DigitalOutput led;
-		private PwmOutput pwmOutput_;
+		private PwmOutput rudderOutput;
 		private double dT = .1;
 		
 		/**
@@ -286,7 +293,7 @@ public class MainActivity extends IOIOActivity {
 		@Override
 		protected void setup() throws ConnectionLostException {
 			led = ioio_.openDigitalOutput(0, true);
-			pwmOutput_ = ioio_.openPwmOutput(12, 100);
+			rudderOutput = ioio_.openPwmOutput(12, 100);
 		}
 		
 		/**
@@ -295,7 +302,8 @@ public class MainActivity extends IOIOActivity {
 		@Override
 		public void loop() throws ConnectionLostException, InterruptedException {
 			led.write(!button.isChecked());
-			pwmOutput_.setPulseWidth(PID.toServoCommand(rollToRudder.control(tunningCommand, rollRawValue, dT)));
+//			rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(tuningCommand, rollRawValue, dT)));
+			rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(tuningCommand, rollRawValue, dT, rollRate)));
 			Thread.sleep((long)(dT*1000));
 		}
 	}
@@ -313,7 +321,7 @@ public class MainActivity extends IOIOActivity {
 	// listeners
 	//=========================================================================
 
-	private SensorEventListener listener = new SensorEventListener()
+	private SensorEventListener sensorListener = new SensorEventListener()
 	{
 		private long lastGyroTime = SystemClock.elapsedRealtime();
 		
@@ -327,8 +335,12 @@ public class MainActivity extends IOIOActivity {
 
 			if (event.sensor == gyro)
 			{
+				Log.d("Sensors", "Gyro event");
+				rollRateRaw = event.values[1];
+				rollRate = alphaGyroLPF*rollRate + (1 - alphaGyroLPF)*rollRateRaw;
+				
 				rawPitchRate = event.values[0];
-				pitchRate = alphaGyroLPF*pitchRate + (1 - alphaGyroLPF)* rawPitchRate;
+				pitchRate = alphaGyroLPF*pitchRate + (1 - alphaGyroLPF)*rawPitchRate;
 				
 				long time = SystemClock.elapsedRealtime();
 				double delta_t = (time - lastGyroTime) / 1.0e3;
@@ -370,25 +382,19 @@ public class MainActivity extends IOIOActivity {
 				else
 					trustAccel = false;
 			}
-			else if (event.sensor == gyro)
-			{
-				gyroXValue = event.values[0];
-				gyroYValue = event.values[1];
-				gyroZValue = event.values[2];
-			}
 			else if (event.sensor == magnetometer)
 			{
 				for(int i =0; i < 3; i++)
 				    valuesMagneticField[i] = event.values[i];
 								
-				updateOriantation();
+				updateOrientation();
 			}
 			
 			pitch = sigmaPitchFilter*rawPitchRotationSensor + (1-sigmaPitchFilter)*rawPitchIntegrated;
 		}
 	};
 	
-	private void updateOriantation() {
+	private void updateOrientation() {
 		
 		double Ts = (SystemClock.currentThreadTimeMillis() - time)/1000.0;
 		time = SystemClock.currentThreadTimeMillis();
@@ -442,7 +448,7 @@ public class MainActivity extends IOIOActivity {
 					
 					switch(type) {
 					case Communicator.COMMAND_MSG_TYPE:
-						tunningCommand = Communicator.getCommand(data);
+						tuningCommand = Communicator.getCommand(data);
 						Toast.makeText(getApplicationContext(), "command received", Toast.LENGTH_LONG).show();
 						break;
 					case Communicator.GAINS_MSG_TYPE:
@@ -450,7 +456,7 @@ public class MainActivity extends IOIOActivity {
 						double[] gains = {0,0,0};
 						Communicator.getGains(data, gains);
 						
-						switch(currentlyTunning) {
+						switch(currentlyTuning) {
 						case(0):
 							rollToRudder.setGains(gains);
 							break;

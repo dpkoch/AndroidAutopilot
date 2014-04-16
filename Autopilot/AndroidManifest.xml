@@ -8,12 +8,18 @@
         android:targetSdkVersion="19" />
 
     <uses-feature
+        android:name="android.hardware.sensor.accelerometer"
+        android:required="true" />
+    <uses-feature
         android:name="android.hardware.sensor.gyroscope"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.sensore.magnetometer"
         android:required="true" />
     <uses-feature
         android:name="android.hardware.sensore.barometer"
         android:required="false" />
-    
+
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 

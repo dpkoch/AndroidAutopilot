@@ -29,6 +29,20 @@ public class PID {
 		kd = gains[2];
 	}
 	
+	public double control(double commanded, double current, double dT, double rate)
+	{
+		double error = commanded - current;
+		integrator = integrator + (dT/2)*(error + error_d1);
+		double value = kp*error + ki*integrator - kd*rate;
+		
+		// anti-windup
+		value = saturate(value);
+		if (ki != 0.0)
+			integrator = integrator + dT/ki *(value - (kp*error + ki*integrator - kd*rate));
+		
+		error_d1 = error;
+		return value;
+	}
 	
 	public double control(double commanded, double current, double dT) {
 		
@@ -38,11 +52,9 @@ public class PID {
 		double value = kp*error;// + ki*integrator + kd*differentiator;
 		
 		//anti-wind-up
-		if(value > limit)
-			value = limit;
-		if(value < -limit)
-			value = -limit;
-		integrator = integrator + dT/ki *(value - (kp*error + ki*integrator + kd*differentiator));
+		value = saturate(value);
+		if (ki != 0.0)
+			integrator = integrator + dT/ki *(value - (kp*error + ki*integrator + kd*differentiator));
 		
 		error_d1 = error;
 		return value;
@@ -57,5 +69,16 @@ public class PID {
 		if(deltaT < 0)
 			deltaT = 0;
 		return 1000 + (int)(deltaT*1000);
+	}
+	
+	private double saturate(double command)
+	{
+		if(command > limit)
+			return limit;
+		if(command < -limit)
+			return -limit;
+		
+		return command;
+		
 	}
 }
