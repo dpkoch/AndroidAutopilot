@@ -1,6 +1,10 @@
 package autopilot.groundstation;
 
 import android.app.Activity;
+import android.content.Context;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.telephony.SmsManager;
 import android.view.View;
@@ -10,6 +14,7 @@ import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.Toast;
 import autopilot.groundstation.R;
+import autopilot.shared.*;
 
 public class MainActivity extends Activity
 {
@@ -21,9 +26,14 @@ public class MainActivity extends Activity
 	private EditText iGain;
 	private EditText dGain;
 	private Button sendGainsButton;
+	
+	private LocationManager locationManager;
+	private double currentLatitude;
+	private double currentLongitude;
+	private boolean gpsRecieved;
 	private Button sendWPButton;
 	
-	private SmsManager manager;
+	private SmsManager smsManager;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -52,7 +62,7 @@ public class MainActivity extends Activity
 				sendGains();
 			}
 		});
-		
+		gpsRecieved = false;
 		sendWPButton = (Button) findViewById(R.id.send_wayPoint);
 		sendWPButton.setOnClickListener(new View.OnClickListener() {
 
@@ -61,17 +71,18 @@ public class MainActivity extends Activity
 				sendWaypoint();				
 			}
 		});
-		manager = SmsManager.getDefault();
+		smsManager = SmsManager.getDefault();
+		//locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+        //locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 	}
 	
 	private void sendCommand() {
 		
 		try
 		{
-			String text = command.getText().toString();
-			text = getString(R.string.prefix) + "\n" + text;
+			String text = Communicator.sendCommand(command.getText().toString());
 			
-			manager.sendTextMessage(destination.getText().toString(), null, text, null, null);
+			smsManager.sendTextMessage(destination.getText().toString(), null, text, null, null);
 			Toast.makeText(getApplicationContext(), "Command sent!", Toast.LENGTH_LONG).show();
 		}
 		catch (Exception e)
@@ -83,13 +94,11 @@ public class MainActivity extends Activity
 	
 	private void sendGains() {
 		
-		try
+		try 
 		{
-			String text = getString(R.string.prefix) + "\n" + pGain.getText().toString() + "," +
-															  iGain.getText().toString() + "," +
-															  dGain.getText().toString();
+			String text = Communicator.sendGains(pGain.getText().toString(), iGain.getText().toString(), dGain.getText().toString());
 			
-			manager.sendTextMessage(destination.getText().toString(), null, text, null, null);
+			smsManager.sendTextMessage(destination.getText().toString(), null, text, null, null);
 			Toast.makeText(getApplicationContext(), "Gains sent!", Toast.LENGTH_LONG).show();
 		}
 		catch (Exception e)
@@ -100,6 +109,41 @@ public class MainActivity extends Activity
 	}
 	
 	private void sendWaypoint() {
-		
+		try 
+		{
+			if(!gpsRecieved)
+				Toast.makeText(getApplicationContext(), "Waypoint failed to send, no GPS signal", Toast.LENGTH_LONG).show();
+			else {
+				String text = Communicator.sendWaypoint(currentLongitude, currentLatitude);
+			
+				smsManager.sendTextMessage(destination.getText().toString(), null, text, null, null);
+				Toast.makeText(getApplicationContext(), "Waypoint sent!", Toast.LENGTH_LONG).show();
+			}	
+		}
+		catch (Exception e)
+		{
+			Toast.makeText(getApplicationContext(), "Waypoint failed to send, please try again", Toast.LENGTH_LONG).show();
+			e.printStackTrace();
+		}
 	}
+	
+	private LocationListener locationListener = new LocationListener() {
+
+		@Override
+		public void onLocationChanged(Location location) {
+			currentLatitude = location.getLatitude();
+			currentLongitude = location.getLongitude();
+			gpsRecieved = true;
+		}
+
+		@Override
+		public void onProviderDisabled(String provider) {}
+
+		@Override
+		public void onProviderEnabled(String provider) {}
+
+		@Override
+		public void onStatusChanged(String provider, int status, Bundle extras) {}
+		
+	};
 }

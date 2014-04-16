@@ -1,6 +1,8 @@
 package autopilot.autopilot;
 
+import autopilot.shared.*;
 import ioio.lib.api.DigitalOutput;
+import ioio.lib.api.PwmOutput;
 import ioio.lib.api.exception.ConnectionLostException;
 import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
@@ -21,6 +23,7 @@ import android.os.SystemClock;
 import android.telephony.SmsMessage;
 import android.util.Log;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 import android.widget.ToggleButton;
 
 import com.jjoe64.graphview.GraphView.GraphViewData;
@@ -41,8 +44,9 @@ public class MainActivity extends IOIOActivity {
 	private SensorManager sensorManager;
 	
 	private Sensor gyro = null;
-	private Sensor rotationSensor = null;
 	private Sensor barometer = null;
+	private Sensor accel = null;
+	private Sensor magnetometer = null;
 	
 	//-----------------------------------------------------------------------
 	// UI elements
@@ -101,6 +105,34 @@ public class MainActivity extends IOIOActivity {
 	private double altitude0;
 	private double altitude; // m
 	
+	
+	private boolean trustAccel = true;
+	private float[] valuesAccelerometer;
+	private float[] valuesMagneticField;
+	
+	double gyroXValue;
+	double gyroYValue;
+	double gyroZValue;
+	
+	double yawRawValue = 0;
+	double pitchRawValue = 0;
+	double rollRawValue = 0;
+	
+	private long time = 0;
+	
+	//-----------------------------------------------------------------------
+	// PID loops
+	//-----------------------------------------------------------------------
+	
+	private PID rollToRudder;
+	private PID headingToRoll;
+	private PID pitchToElivator;
+	private PID altitudeToPitch;
+	private PID airspeedToThrottle;
+	
+	private double tunningCommand = 0;
+	private int currentlyTunning = 0;
+	
 	//-----------------------------------------------------------------------
 	// sms receiver
 	//-----------------------------------------------------------------------
@@ -116,7 +148,14 @@ public class MainActivity extends IOIOActivity {
 		setContentView(R.layout.main);
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 		
-		// SMS
+		// pid loops
+		rollToRudder = new PID(2.8, 0, 0, 1);
+		/*headingToRoll = new PID(1.0, 0, 0);
+		pitchToElivator = new PID(1.0, 0, 0);
+		altitudeToPitch = new PID(1.0, 0, 0);
+		airspeedToThrottle = new PID(1.0, 0, 0);*/
+		
+		// sms
 		IntentFilter filter = new IntentFilter(SMS_ACTION);
 		filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY - 1);
 		registerReceiver(smsReceiver, filter);
@@ -129,9 +168,6 @@ public class MainActivity extends IOIOActivity {
 		if (sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null)
         	gyro = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
 		
-		if (sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null)
-        	rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-		
 		if (sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) != null)
 		{
 			barometer = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE);
@@ -141,6 +177,15 @@ public class MainActivity extends IOIOActivity {
 		{
 			Log.w("Sensors", "Barometer not found!");
 		}
+		
+		if (sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null)
+        	accel = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+		
+        if (sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null)
+        	magnetometer = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        
+        valuesAccelerometer = new float[3];
+        valuesMagneticField = new float[3];
 		
 		// pitch graph
 		/*pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
@@ -188,11 +233,14 @@ public class MainActivity extends IOIOActivity {
     	if (gyro != null)
     		sensorManager.registerListener(listener, gyro, sensorSampleTimeUs);
     	
-    	if (rotationSensor != null)
-    		sensorManager.registerListener(listener, rotationSensor, sensorSampleTimeUs);
-    	
     	if (barometer != null)
     		sensorManager.registerListener(listener, barometer, sensorSampleTimeUs);
+    	
+    	if (accel != null)
+    		sensorManager.registerListener(listener, accel, SensorManager.SENSOR_DELAY_FASTEST);
+    	
+    	if (magnetometer != null)
+    		sensorManager.registerListener(listener, magnetometer, SensorManager.SENSOR_DELAY_FASTEST);
     	
     	// graphs
     	/*graphTimer = new Runnable() {
@@ -229,6 +277,8 @@ public class MainActivity extends IOIOActivity {
 	class Looper extends BaseIOIOLooper {
 		
 		private DigitalOutput led;
+		private PwmOutput pwmOutput_;
+		private double dT = .1;
 		
 		/**
 		 * Called once each time a connection is made to the IOIO board 
@@ -236,17 +286,17 @@ public class MainActivity extends IOIOActivity {
 		@Override
 		protected void setup() throws ConnectionLostException {
 			led = ioio_.openDigitalOutput(0, true);
+			pwmOutput_ = ioio_.openPwmOutput(12, 100);
 		}
 		
 		/**
 		 * Called continuously as long as a connection with the IOIO board exists
 		 */
 		@Override
-		public void loop() throws ConnectionLostException {
+		public void loop() throws ConnectionLostException, InterruptedException {
 			led.write(!button.isChecked());
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {}
+			pwmOutput_.setPulseWidth(PID.toServoCommand(rollToRudder.control(tunningCommand, rollRawValue, dT)));
+			Thread.sleep((long)(dT*1000));
 		}
 	}
 	
@@ -285,16 +335,10 @@ public class MainActivity extends IOIOActivity {
 				lastGyroTime = time;
 				
 				rawPitchIntegrated = rawPitchIntegrated + delta_t * rawPitchRate;
-			}
-			else if (event.sensor == rotationSensor)
-			{
-				float[] R = new float[9];
-				SensorManager.getRotationMatrixFromVector(R, event.values);
-
-				float values[] = new float[3];
-				SensorManager.getOrientation(R, values);
-
-				rawPitchRotationSensor = -values[1];
+				
+				gyroXValue = event.values[0];
+				gyroYValue = event.values[1];
+				gyroZValue = event.values[2];
 			}
 			else if (event.sensor == barometer)
 			{
@@ -314,11 +358,70 @@ public class MainActivity extends IOIOActivity {
 				double currAltitude = SensorManager.getAltitude(SensorManager.PRESSURE_STANDARD_ATMOSPHERE, barometerLPF);
 				altitude = currAltitude - altitude0;
 			}
+			else if (event.sensor == accel)
+			{
+				double total = Math.sqrt(Math.pow(event.values[0], 2.0) + Math.pow(event.values[1], 2.0) + Math.pow(event.values[2], 2.0));
+				
+				for(int i =0; i < 3; i++)
+				    valuesAccelerometer[i] = event.values[i];
+				
+				if(total > 9.5 && total < 10.2)
+					trustAccel = true;
+				else
+					trustAccel = false;
+			}
+			else if (event.sensor == gyro)
+			{
+				gyroXValue = event.values[0];
+				gyroYValue = event.values[1];
+				gyroZValue = event.values[2];
+			}
+			else if (event.sensor == magnetometer)
+			{
+				for(int i =0; i < 3; i++)
+				    valuesMagneticField[i] = event.values[i];
+								
+				updateOriantation();
+			}
 			
 			pitch = sigmaPitchFilter*rawPitchRotationSensor + (1-sigmaPitchFilter)*rawPitchIntegrated;
 		}
 	};
 	
+	private void updateOriantation() {
+		
+		double Ts = (SystemClock.currentThreadTimeMillis() - time)/1000.0;
+		time = SystemClock.currentThreadTimeMillis();
+		
+		if(trustAccel) {
+			float[] matrixR = new float[9];
+		    float[] matrixI = new float[9];
+		    
+			boolean success = SensorManager.getRotationMatrix(
+					matrixR,
+					matrixI,
+					valuesAccelerometer,
+					valuesMagneticField);
+			
+			if(success){
+				float[] matrixValues = new float[3];
+				SensorManager.getOrientation(matrixR, matrixValues);
+	     
+				yawRawValue = matrixValues[0];
+				pitchRawValue = matrixValues[1];
+				rollRawValue = matrixValues[2];
+			}
+		}
+		else {
+			yawRawValue = yawRawValue + gyroZValue*Ts;
+			rollRawValue = rollRawValue + gyroYValue*Ts;//Integrate the gyros instead
+			pitchRawValue = pitchRawValue + gyroXValue*Ts;
+		}	
+	}
+	
+	//=========================================================================
+	// SMS receiver
+	//=========================================================================
 	
 	private final BroadcastReceiver smsReceiver = new BroadcastReceiver()
 	{
@@ -332,28 +435,52 @@ public class MainActivity extends IOIOActivity {
 				SmsMessage message = SmsMessage.createFromPdu((byte[]) pdus[0]);
 				String data = message.getMessageBody();
 
-				if (data != null)
+				if (Communicator.isAutopilotMSG(data))
 				{
-					String[] lines = data.split("\n");
-
-					if (lines[0].equals(context.getString(R.string.prefix)))
-					{
-						abortBroadcast();
-						String body = data.substring(lines[0].length() + 1);
-						displaySMSAlert(body);
+					int type = Communicator.getMsgType(data);
+					abortBroadcast();
+					
+					switch(type) {
+					case Communicator.COMMAND_MSG_TYPE:
+						tunningCommand = Communicator.getCommand(data);
+						Toast.makeText(getApplicationContext(), "command received", Toast.LENGTH_LONG).show();
+						break;
+					case Communicator.GAINS_MSG_TYPE:
+						
+						double[] gains = {0,0,0};
+						Communicator.getGains(data, gains);
+						
+						switch(currentlyTunning) {
+						case(0):
+							rollToRudder.setGains(gains);
+							break;
+						case(1):
+							headingToRoll.setGains(gains);
+							break;
+						case(2):
+							pitchToElivator.setGains(gains);
+							break;
+						case(3):
+							altitudeToPitch.setGains(gains);
+							break;
+						case(4):
+							airspeedToThrottle.setGains(gains);
+							break;
+						default:
+							break;
+						}
+												
+						Toast.makeText(getApplicationContext(), "gains received", Toast.LENGTH_LONG).show();
+						break;
+					case Communicator.WAYPOINT_MSG_TYPE:
+						Toast.makeText(getApplicationContext(), "waypoint received", Toast.LENGTH_LONG).show();
+						break;
+					default:
+						Toast.makeText(getApplicationContext(), "unknown message!", Toast.LENGTH_LONG).show();
+						break;
 					}
 				}
 			}
 		}
 	};
-	
-	private void displaySMSAlert(String data)
-	{
-		AlertDialog.Builder builder = new AlertDialog.Builder(this);
-		builder.setTitle("Message Intercepted!");
-		builder.setMessage(data);
-
-		AlertDialog dialog = builder.create();
-		dialog.show();
-	}
 }

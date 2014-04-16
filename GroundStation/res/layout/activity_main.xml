@@ -33,7 +33,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="0.58"
             android:hint="@string/hint_command"
-            android:inputType="phone"
+            android:inputType="numberDecimal"
             android:maxLines="10"
             android:scrollbars="vertical" />
 
@@ -61,7 +61,7 @@
 	        android:layout_height="wrap_content"
 	        android:layout_weight="0.20"
 	        android:ems="10"
-	        android:inputType="number" />
+	        android:inputType="numberDecimal" />
 	    
 	    <TextView 
             android:layout_width="wrap_content"
@@ -75,7 +75,7 @@
 	        android:layout_height="wrap_content"
 	        android:layout_weight="0.26"
 	        android:ems="10"
-	        android:inputType="number" />
+	        android:inputType="numberDecimal" />
 	    
 	    <TextView 
             android:layout_width="wrap_content"
@@ -89,7 +89,7 @@
 	        android:layout_height="wrap_content"
 	        android:layout_weight="0.26"
 	        android:ems="10"
-	        android:inputType="number" />
+	        android:inputType="numberDecimal" />
 
 	    <Button
 	        android:id="@+id/send_gains"
