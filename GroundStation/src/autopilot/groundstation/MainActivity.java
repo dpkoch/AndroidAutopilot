@@ -26,7 +26,7 @@ public class MainActivity extends Activity
 	private EditText iGain;
 	private EditText dGain;
 	private Button sendGainsButton;
-	
+	private Button trimButton;
 	private LocationManager locationManager;
 	private double currentLatitude;
 	private double currentLongitude;
@@ -60,6 +60,14 @@ public class MainActivity extends Activity
 			@Override
 			public void onClick(View v) {
 				sendGains();
+			}
+		});
+		trimButton = (Button) findViewById(R.id.trim);
+		trimButton.setOnClickListener(new View.OnClickListener() {
+
+			@Override
+			public void onClick(View v) {
+				trim();
 			}
 		});
 		gpsRecieved = false;
@@ -104,6 +112,21 @@ public class MainActivity extends Activity
 		catch (Exception e)
 		{
 			Toast.makeText(getApplicationContext(), "Gains failed to send, please try again", Toast.LENGTH_LONG).show();
+			e.printStackTrace();
+		}
+	}
+	
+	private void trim() {
+		try 
+		{
+			String text = Communicator.sendTrim();
+			
+			smsManager.sendTextMessage(destination.getText().toString(), null, text, null, null);
+			Toast.makeText(getApplicationContext(), "Trim sent!", Toast.LENGTH_LONG).show();	
+		}
+		catch (Exception e)
+		{
+			Toast.makeText(getApplicationContext(), "Trim failed, please try again", Toast.LENGTH_LONG).show();
 			e.printStackTrace();
 		}
 	}

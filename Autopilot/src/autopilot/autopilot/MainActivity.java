@@ -7,7 +7,6 @@ import ioio.lib.api.exception.ConnectionLostException;
 import ioio.lib.util.BaseIOIOLooper;
 import ioio.lib.util.IOIOLooper;
 import ioio.lib.util.android.IOIOActivity;
-import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -17,6 +16,9 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
@@ -109,7 +111,7 @@ public class MainActivity extends IOIOActivity {
 	private double altitude0;
 	private double altitude; // m
 	
-	
+	// oriantation
 	private boolean trustAccel = true;
 	private float[] valuesAccelerometer;
 	private float[] valuesMagneticField;
@@ -123,6 +125,10 @@ public class MainActivity extends IOIOActivity {
 	double rollRawValue = 0;
 	
 	private long time = 0;
+	
+	// trims
+	double pitchTrim = 0;
+	double rollTrim = 0;
 	
 	//-----------------------------------------------------------------------
 	// PID loops
@@ -142,6 +148,20 @@ public class MainActivity extends IOIOActivity {
 	//-----------------------------------------------------------------------
 	private String SMS_ACTION = android.provider.Telephony.Sms.Intents.SMS_RECEIVED_ACTION;
 	
+	//-----------------------------------------------------------------------
+	// gps
+	//-----------------------------------------------------------------------
+	private LocationManager locationManager;
+	private double homeLatitude;
+	private double homeLongitude;
+	private boolean homeSet;
+	private float positionNorth = 0;
+	private float positionEast = 0;
+	private float waypointNorth = 0;
+	private float waypointEast = 0;
+	
+	private double heading;
+	
 	//=========================================================================
 	// Android activity
 	//=========================================================================
@@ -153,9 +173,9 @@ public class MainActivity extends IOIOActivity {
 		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 		
 		// pid loops
-		rollToRudder = new PID(2.8, 0, 0, 1);
-		/*headingToRoll = new PID(1.0, 0, 0);
-		pitchToElivator = new PID(1.0, 0, 0);
+		rollToRudder = new PID(.9, 0, .1, 1);
+		headingToRoll = new PID(1.0, 0, 0, Math.toRadians(30));
+		/*pitchToElivator = new PID(1.0, 0, 0);
 		altitudeToPitch = new PID(1.0, 0, 0);
 		airspeedToThrottle = new PID(1.0, 0, 0);*/
 		
@@ -229,6 +249,12 @@ public class MainActivity extends IOIOActivity {
 
 		LinearLayout altitudeGraphLayout = (LinearLayout) findViewById(R.id.altitude_graph);
 		altitudeGraphLayout.addView(altitudeGraph);*/
+		
+		// gps
+		homeSet = false;
+        
+        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
 	}
 	
 	@Override
@@ -479,7 +505,14 @@ public class MainActivity extends IOIOActivity {
 						Toast.makeText(getApplicationContext(), "gains received", Toast.LENGTH_LONG).show();
 						break;
 					case Communicator.WAYPOINT_MSG_TYPE:
+						double[] longiLati = new double[2];
+						Communicator.getWaypoint(data, longiLati);
+						convertLLtoNE(longiLati[0], longiLati[1], waypointNorth, waypointEast);
 						Toast.makeText(getApplicationContext(), "waypoint received", Toast.LENGTH_LONG).show();
+						break;
+					case Communicator.TRIM_MSG_TYPE:
+						trim();
+						Toast.makeText(getApplicationContext(), "Trim requested", Toast.LENGTH_LONG).show();
 						break;
 					default:
 						Toast.makeText(getApplicationContext(), "unknown message!", Toast.LENGTH_LONG).show();
@@ -489,4 +522,58 @@ public class MainActivity extends IOIOActivity {
 			}
 		}
 	};
+	
+	//=========================================================================
+	// trim
+	//=========================================================================
+	
+	private void trim() {
+		pitchTrim = pitchRawValue;
+		rollTrim = rollRawValue;
+	}
+	
+	//=========================================================================
+	// gps
+	//=========================================================================
+	
+	private LocationListener locationListener = new LocationListener()
+    {
+    	    	
+    	public void onLocationChanged(Location location)
+    	{
+    		if(!homeSet) {
+    			homeSet = true;
+    			homeLatitude = location.getLatitude();
+    			homeLongitude = location.getLongitude();
+    			positionNorth = 0;
+    			positionEast = 0;
+    		}
+    		else
+    			convertLLtoNE(location.getLongitude(), location.getLatitude(), positionNorth, positionEast);
+    		
+    		heading = Math.atan2(waypointEast-positionEast, waypointNorth-positionNorth);
+    	}
+
+		@Override
+		public void onStatusChanged(String provider, int status, Bundle extras) {}
+
+		@Override
+		public void onProviderDisabled(String provider) {}
+
+		@Override
+		public void onProviderEnabled(String provider) {}
+    };
+    
+    private void convertLLtoNE(double longitude, double latitude, float north, float east) {
+    	
+    	float[] results = new float[3];
+		Location.distanceBetween(homeLatitude, longitude, latitude, longitude, results);
+		if(latitude-homeLatitude < 0)
+			results[0] = -results[0];
+		north = results[0];
+		Location.distanceBetween(latitude, homeLongitude, latitude, longitude, results);
+		if(longitude-homeLongitude < 0)
+			results[0] = -results[0];
+		east = results[0];
+    }
 }

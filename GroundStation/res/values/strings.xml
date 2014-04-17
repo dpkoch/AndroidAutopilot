@@ -10,6 +10,7 @@
     <string name="label_p">P:</string>
     <string name="label_i">I:</string>
     <string name="label_d">D:</string>
+    <string name="label_trim">Trim</string>
     <string name="label_sendWP">Send Waypoint</string>
     <string name="label_prefix">Prefix:</string>
     <string name="prefix">#!autopilot</string>

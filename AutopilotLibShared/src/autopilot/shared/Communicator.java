@@ -6,6 +6,7 @@ public class Communicator {
 	private static final String COMMAND = "cmd";
 	private static final String GAINS = "gns";
 	private static final String WAYPOINT = "wp";
+	private static final String TRIM = "trim";
 	public static final int P = 0;
 	public static final int I = 1;
 	public static final int D = 2;
@@ -14,6 +15,7 @@ public class Communicator {
 	public static final int COMMAND_MSG_TYPE = 0;
 	public static final int GAINS_MSG_TYPE = 1;
 	public static final int WAYPOINT_MSG_TYPE = 2;
+	public static final int TRIM_MSG_TYPE = 3;
 	public static final int UNDEFINED_TYPE = -1;
 	
 	public static String sendCommand(String command) {
@@ -59,6 +61,11 @@ public class Communicator {
 		location[LATITUDE] = Double.parseDouble(wpLocation[LATITUDE]);
 	}
 	
+	public static String sendTrim() {
+		String message = PREFIX + "\n" + TRIM;
+		return message;
+	}
+	
 	public static int getMsgType(String message) {
 		String word = message.split("\n")[1];
 		if(word.equals(COMMAND))
@@ -67,6 +74,8 @@ public class Communicator {
 			return GAINS_MSG_TYPE;
 		else if(word.equals(WAYPOINT))
 			return WAYPOINT_MSG_TYPE;
+		else if(word.equals(TRIM))
+			return TRIM_MSG_TYPE;
 		else
 			return UNDEFINED_TYPE;
 	}
