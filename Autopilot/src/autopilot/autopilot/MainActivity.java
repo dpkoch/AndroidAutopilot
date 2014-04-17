@@ -1,6 +1,5 @@
 package autopilot.autopilot;
 
-import autopilot.shared.*;
 import ioio.lib.api.DigitalOutput;
 import ioio.lib.api.PwmOutput;
 import ioio.lib.api.exception.ConnectionLostException;
@@ -24,9 +23,12 @@ import android.os.Handler;
 import android.os.SystemClock;
 import android.telephony.SmsMessage;
 import android.util.Log;
+import android.widget.CompoundButton;
+import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 import android.widget.ToggleButton;
+import autopilot.shared.Communicator;
 
 import com.jjoe64.graphview.GraphView.GraphViewData;
 import com.jjoe64.graphview.GraphViewSeries;
@@ -54,7 +56,7 @@ public class MainActivity extends IOIOActivity {
 	// UI elements
 	//-----------------------------------------------------------------------
 	
-	private ToggleButton button;
+	private ToggleButton graphsButton;
 	
 	//-----------------------------------------------------------------------
 	// graphs
@@ -63,14 +65,29 @@ public class MainActivity extends IOIOActivity {
 	private final Handler graphHandler = new Handler();
 	private Runnable graphTimer;
 	
+	private LineGraphView northGraph;
+	private GraphViewSeries northGraphSeries;
+	
+	private LineGraphView eastGraph;
+	private GraphViewSeries eastGraphSeries;
+	
+	private LineGraphView courseGraph;
+	private GraphViewSeries courseGraphSeries;
+	
+	private LineGraphView altitudeGraph;
+	private GraphViewSeries altitudeGraphSeries;
+	
+	private LineGraphView rollGraph;
+	private GraphViewSeries rollGraphSeries;
+	
+	private LineGraphView rollRateGraph;
+	private GraphViewSeries rollRateGraphSeries;
+	
 	private LineGraphView pitchGraph;
 	private GraphViewSeries pitchGraphSeries;
 	
 	private LineGraphView pitchRateGraph;
 	private GraphViewSeries pitchRateGraphSeries;
-	
-	private LineGraphView altitudeGraph;
-	private GraphViewSeries altitudeGraphSeries;
 	
 	//-----------------------------------------------------------------------
 	// tuning parameters
@@ -94,8 +111,8 @@ public class MainActivity extends IOIOActivity {
 	//-----------------------------------------------------------------------
 	
 	// roll and roll rate
-	private double rollRateRaw;
-	private double rollRate;
+	private double rollRateRaw = 0;
+	private double rollRate = 0;
 	
 	// pitch and pitch rate
 	private double pitch = 0.0; // rad
@@ -109,7 +126,7 @@ public class MainActivity extends IOIOActivity {
 	private float barometerRaw = SensorManager.PRESSURE_STANDARD_ATMOSPHERE; // hPa
 	private float barometerLPF = SensorManager.PRESSURE_STANDARD_ATMOSPHERE; // hPa
 	private double altitude0;
-	private double altitude; // m
+	private double altitude = 0; // m
 	
 	// oriantation
 	private boolean trustAccel = true;
@@ -127,8 +144,9 @@ public class MainActivity extends IOIOActivity {
 	private long time = 0;
 	
 	// trims
-	double pitchTrim = 0;
-	double rollTrim = 0;
+	private double pitchTrim = 0;
+	private double rollTrim = 0;
+	private double altitudeTrim = 30; // m
 	
 	//-----------------------------------------------------------------------
 	// PID loops
@@ -136,7 +154,7 @@ public class MainActivity extends IOIOActivity {
 	
 	private PID rollToRudder;
 	private PID headingToRoll;
-	private PID pitchToElivator;
+	private PID pitchToElevator;
 	private PID altitudeToPitch;
 	private PID airspeedToThrottle;
 	
@@ -160,7 +178,7 @@ public class MainActivity extends IOIOActivity {
 	private float waypointNorth = 0;
 	private float waypointEast = 0;
 	
-	private double heading;
+	private double heading = 0;
 	
 	//=========================================================================
 	// Android activity
@@ -175,16 +193,29 @@ public class MainActivity extends IOIOActivity {
 		// pid loops
 		rollToRudder = new PID(.9, 0, .1, 1);
 		headingToRoll = new PID(1.0, 0, 0, Math.toRadians(30));
-		/*pitchToElivator = new PID(1.0, 0, 0);
-		altitudeToPitch = new PID(1.0, 0, 0);
-		airspeedToThrottle = new PID(1.0, 0, 0);*/
+		pitchToElevator = new PID(1.0, 0, 0, Math.toRadians(30));
+		altitudeToPitch = new PID(1.0, 0, 0, Math.toRadians(30));
+//		airspeedToThrottle = new PID(1.0, 0, 0, 1);
 		
 		// sms
 		IntentFilter filter = new IntentFilter(SMS_ACTION);
 		filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY - 1);
 		registerReceiver(smsReceiver, filter);
 		
-		button = (ToggleButton) findViewById(R.id.toggle_button);
+		graphsButton = (ToggleButton) findViewById(R.id.graphs_button);
+		graphsButton.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				if (isChecked)
+				{
+					startGraphs();
+				}
+				else
+				{
+					stopGraphs();
+				}
+			}
+		});
 		
 		// sensors
 		sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -214,41 +245,38 @@ public class MainActivity extends IOIOActivity {
         valuesAccelerometer = new float[3];
         valuesMagneticField = new float[3];
 		
-		// pitch graph
-		pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
-		pitchGraph = new LineGraphView(this, "Pitch");
-		pitchGraph.addSeries(pitchGraphSeries);
-		pitchGraph.setViewPort(0, 30);
-		pitchGraph.setScalable(true);
-		pitchGraph.getGraphViewStyle().setNumHorizontalLabels(2);
-		pitchGraph.getGraphViewStyle().setVerticalLabelsWidth(60);
-		
-		LinearLayout pitchGraphLayout = (LinearLayout) findViewById(R.id.pitch_graph);
-		pitchGraphLayout.addView(pitchGraph);
-		
-		// pitch rate graph
-		pitchRateGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
-		pitchRateGraph = new LineGraphView(this, "Pitch Rate");
-		pitchRateGraph.addSeries(pitchRateGraphSeries);
-		pitchRateGraph.setViewPort(0, 30);
-		pitchRateGraph.setScalable(true);
-		pitchRateGraph.getGraphViewStyle().setNumHorizontalLabels(2);
-		pitchRateGraph.getGraphViewStyle().setVerticalLabelsWidth(60);
-		
-		LinearLayout pitchRateGraphLayout = (LinearLayout) findViewById(R.id.pitch_rate_graph);
-		pitchRateGraphLayout.addView(pitchRateGraph);
-		
-		// altitude graph
-		/*altitudeGraphSeries = new GraphViewSeries(new GraphViewData[] {});;
-		altitudeGraph = new LineGraphView(this, "Altitude");
-		altitudeGraph.addSeries(altitudeGraphSeries);
-		altitudeGraph.setViewPort(0, 30);
-		altitudeGraph.setScalable(true);
-		altitudeGraph.getGraphViewStyle().setNumHorizontalLabels(2);
-		altitudeGraph.getGraphViewStyle().setVerticalLabelsWidth(60);
-
-		LinearLayout altitudeGraphLayout = (LinearLayout) findViewById(R.id.altitude_graph);
-		altitudeGraphLayout.addView(altitudeGraph);*/
+        // graphs
+        northGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        northGraph = new LineGraphView(this, "North");
+        initGraph(northGraph, northGraphSeries, R.id.north_graph);
+        
+        eastGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        eastGraph = new LineGraphView(this, "East");
+        initGraph(eastGraph, eastGraphSeries, R.id.east_graph);
+        
+        altitudeGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        altitudeGraph = new LineGraphView(this, "Altitude");
+        initGraph(altitudeGraph, altitudeGraphSeries, R.id.altitude_graph);
+        
+        courseGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        courseGraph = new LineGraphView(this, "Course");
+        initGraph(courseGraph, courseGraphSeries, R.id.course_graph);
+        
+        rollGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        rollGraph = new LineGraphView(this, "Roll");
+        initGraph(rollGraph, rollGraphSeries, R.id.roll_graph);
+        
+        rollRateGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        rollRateGraph = new LineGraphView(this, "Roll Rate");
+        initGraph(rollRateGraph, rollRateGraphSeries, R.id.roll_rate_graph);
+        
+        pitchGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        pitchGraph = new LineGraphView(this, "Pitch");
+        initGraph(pitchGraph, pitchGraphSeries, R.id.pitch_graph);
+        
+        pitchRateGraphSeries = new GraphViewSeries(new GraphViewData[] {});
+        pitchRateGraph = new LineGraphView(this, "Pitch Rate");
+        initGraph(pitchRateGraph, pitchRateGraphSeries, R.id.pitch_rate_graph);
 		
 		// gps
 		homeSet = false;
@@ -276,16 +304,10 @@ public class MainActivity extends IOIOActivity {
     		sensorManager.registerListener(sensorListener, magnetometer, sensorSampleTimeUs);
     	
     	// graphs
-    	graphTimer = new Runnable() {
-    		@Override
-    		public void run() {
-    			pitchGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, Math.toDegrees(rollRawValue)), true, 1000);
-    			pitchRateGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, Math.toDegrees(rollRate)), true, 1000);
-//    			altitudeGraphSeries.appendData(new GraphViewData(SystemClock.currentThreadTimeMillis() / 100, altitude), true, 1000);
-    			graphHandler.postDelayed(this, 100);
-    		}
-    	};
-    	graphHandler.post(graphTimer);
+    	if (graphsButton.isChecked())
+    	{
+    		startGraphs();
+    	}
     }
     
     @Override
@@ -295,7 +317,7 @@ public class MainActivity extends IOIOActivity {
     	sensorManager.unregisterListener(sensorListener);
     	
     	// graphs
-    	graphHandler.removeCallbacks(graphTimer);
+    	stopGraphs();
 
     	super.onPause();
     }
@@ -309,8 +331,10 @@ public class MainActivity extends IOIOActivity {
 	 */
 	class Looper extends BaseIOIOLooper {
 		
-		private DigitalOutput led;
+		private PwmOutput throttleOutput;
+		private PwmOutput elevatorOutput;
 		private PwmOutput rudderOutput;
+		
 		private double dT = .1;
 		
 		/**
@@ -318,7 +342,8 @@ public class MainActivity extends IOIOActivity {
 		 */
 		@Override
 		protected void setup() throws ConnectionLostException {
-			led = ioio_.openDigitalOutput(0, true);
+			throttleOutput = ioio_.openPwmOutput(10, 100);
+			elevatorOutput = ioio_.openPwmOutput(11, 100);
 			rudderOutput = ioio_.openPwmOutput(12, 100);
 		}
 		
@@ -327,9 +352,40 @@ public class MainActivity extends IOIOActivity {
 		 */
 		@Override
 		public void loop() throws ConnectionLostException, InterruptedException {
-			led.write(!button.isChecked());
-//			rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(tuningCommand, rollRawValue, dT)));
-			rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(tuningCommand, rollRawValue, dT, rollRate)));
+
+			double rollCommand;
+			double pitchCommand;
+			
+			switch (currentlyTuning)
+			{
+			case 0:
+				rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(rollTrim + tuningCommand, rollRawValue, dT, rollRate)));
+				break;
+			case 1:
+				rollCommand = headingToRoll.control(tuningCommand, yawRawValue, dT);
+				rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(rollTrim + rollCommand, rollRawValue, dT, rollRate)));
+				break;
+			case 2:
+				elevatorOutput.setPulseWidth(PID.toServoCommand(pitchToElevator.control(pitchTrim + tuningCommand, pitch, dT, pitchRate)));
+				break;
+			case 3:
+				pitchCommand = altitudeToPitch.control(tuningCommand, altitudeTrim, dT);
+				elevatorOutput.setPulseWidth(PID.toServoCommand(pitchToElevator.control(pitchTrim + pitchCommand, pitch, dT, pitchRate)));
+				break;
+			case 4:
+				// throttleOutput.setPulseWidth(PID.toThrottleCommand(airspeedToThrottle.control(tuningCommand, airspeed, dT)));
+				break;
+			default:
+				rollCommand = headingToRoll.control(heading, yawRawValue, dT);
+				rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(rollTrim + rollCommand, rollRawValue, dT, rollRate)));
+
+				pitchCommand = altitudeToPitch.control(altitude, altitudeTrim, dT);
+				elevatorOutput.setPulseWidth(PID.toServoCommand(pitchToElevator.control(pitchTrim + pitchCommand, pitch, dT, pitchRate)));
+
+				// throttleOutput.setPulseWidth(PID.toThrottleCommand(airspeedToThrottle.control(airspeedTrim, airspeed, dT)));
+				break;
+			}
+			
 			Thread.sleep((long)(dT*1000));
 		}
 	}
@@ -361,7 +417,6 @@ public class MainActivity extends IOIOActivity {
 
 			if (event.sensor == gyro)
 			{
-				Log.d("Sensors", "Gyro event");
 				rollRateRaw = event.values[1];
 				rollRate = alphaGyroLPF*rollRate + (1 - alphaGyroLPF)*rollRateRaw;
 				
@@ -490,7 +545,7 @@ public class MainActivity extends IOIOActivity {
 							headingToRoll.setGains(gains);
 							break;
 						case(2):
-							pitchToElivator.setGains(gains);
+							pitchToElevator.setGains(gains);
 							break;
 						case(3):
 							altitudeToPitch.setGains(gains);
@@ -530,6 +585,7 @@ public class MainActivity extends IOIOActivity {
 	private void trim() {
 		pitchTrim = pitchRawValue;
 		rollTrim = rollRawValue;
+		altitudeTrim = altitude;
 	}
 	
 	//=========================================================================
@@ -575,5 +631,49 @@ public class MainActivity extends IOIOActivity {
 		if(longitude-homeLongitude < 0)
 			results[0] = -results[0];
 		east = results[0];
+    }
+    
+	//=========================================================================
+    // graphing
+	//=========================================================================
+    
+    private void initGraph(LineGraphView graph, GraphViewSeries series, int view)
+    {
+		graph.addSeries(series);
+		graph.setViewPort(0, 30);
+		graph.setScalable(true);
+		graph.getGraphViewStyle().setNumHorizontalLabels(2);
+		graph.getGraphViewStyle().setVerticalLabelsWidth(60);
+		
+		LinearLayout layout = (LinearLayout) findViewById(view);
+		layout.addView(graph);
+    }
+    
+    private void startGraphs()
+    {
+    	graphTimer = new Runnable() {
+			
+			private static final int max_count = 1000;
+			
+			@Override
+			public void run() {
+				double time = SystemClock.currentThreadTimeMillis() / 100;
+				northGraphSeries.appendData(new GraphViewData(time, positionNorth), true, max_count);
+				eastGraphSeries.appendData(new GraphViewData(time, positionEast), true, max_count);
+				courseGraphSeries.appendData(new GraphViewData(time, Math.toDegrees(yawRawValue)), true, max_count);
+				altitudeGraphSeries.appendData(new GraphViewData(time, altitude), true, max_count);
+				rollGraphSeries.appendData(new GraphViewData(time, Math.toDegrees(rollRawValue)), true, max_count);
+				rollRateGraphSeries.appendData(new GraphViewData(time, Math.toDegrees(rollRate)), true, max_count);
+				pitchGraphSeries.appendData(new GraphViewData(time, Math.toDegrees(pitch)), true, max_count);
+				pitchRateGraphSeries.appendData(new GraphViewData(time, Math.toDegrees(pitchRate)), true, max_count);
+				graphHandler.postDelayed(this, 100);
+			}
+		};
+		graphHandler.post(graphTimer);
+    }
+    
+    private void stopGraphs()
+    {
+    	graphHandler.removeCallbacks(graphTimer);
     }
 }

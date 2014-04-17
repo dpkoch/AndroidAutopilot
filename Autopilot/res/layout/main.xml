@@ -12,30 +12,59 @@
             android:id="@+id/title"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:text="@string/title" />
+            android:text="@string/graphs_label" />
 
         <ToggleButton
-            android:id="@+id/toggle_button"
+            android:id="@+id/graphs_button"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/button_text" />
+            android:layout_height="wrap_content" />
 
         <LinearLayout
-            android:id="@+id/pitch_graph"
+            android:id="@+id/north_graph"
             android:layout_width="fill_parent"
-            android:layout_height="150dip"
+            android:layout_height="@dimen/graph_height"
             android:orientation="vertical" />
 
         <LinearLayout
-            android:id="@+id/pitch_rate_graph"
+            android:id="@+id/east_graph"
             android:layout_width="fill_parent"
-            android:layout_height="150dip"
+            android:layout_height="@dimen/graph_height"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/course_graph"
+            android:layout_width="fill_parent"
+            android:layout_height="@dimen/graph_height"
             android:orientation="vertical" />
 
         <LinearLayout
             android:id="@+id/altitude_graph"
             android:layout_width="fill_parent"
-            android:layout_height="150dip"
+            android:layout_height="@dimen/graph_height"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/roll_graph"
+            android:layout_width="fill_parent"
+            android:layout_height="@dimen/graph_height"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/roll_rate_graph"
+            android:layout_width="fill_parent"
+            android:layout_height="@dimen/graph_height"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/pitch_graph"
+            android:layout_width="fill_parent"
+            android:layout_height="@dimen/graph_height"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/pitch_rate_graph"
+            android:layout_width="fill_parent"
+            android:layout_height="@dimen/graph_height"
             android:orientation="vertical" />
         
     </LinearLayout>

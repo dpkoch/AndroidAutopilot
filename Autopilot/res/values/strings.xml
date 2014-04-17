@@ -1,8 +1,8 @@
 <resources>
 
     <string name="app_name">Autopilot</string>
-    <string name="title">Testing...</string>
-    <string name="button_text">Button!</string>
+    <string name="graphs_label">Graphs:</string>
+    <string name="button_text">Graphs</string>
     <string name="prefix">#!autopilot</string>
 
 </resources>
