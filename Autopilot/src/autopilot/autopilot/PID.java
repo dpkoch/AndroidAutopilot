@@ -49,7 +49,7 @@ public class PID {
 		double error = commanded - current;
 		integrator = integrator + (dT/2)*(error + error_d1);
 		differentiator = (2*tau-dT)/(2*tau+dT)*differentiator + (2/(2*tau+dT))*(error - error_d1);
-		double value = kp*error;// + ki*integrator + kd*differentiator;
+		double value = kp*error + ki*integrator + kd*differentiator;
 		
 		//anti-wind-up
 		value = saturate(value);
