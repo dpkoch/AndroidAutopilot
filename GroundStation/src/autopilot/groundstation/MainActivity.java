@@ -7,6 +7,8 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.telephony.SmsManager;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
@@ -21,6 +23,7 @@ public class MainActivity extends Activity
 
 	private EditText destination;
 	private EditText command;
+	private EditText degCommand;
 	private Button sendCmdButton;
 	private EditText pGain;
 	private EditText iGain;
@@ -42,6 +45,26 @@ public class MainActivity extends Activity
 		
 		destination = (EditText) findViewById(R.id.destination);
 		command = (EditText) findViewById(R.id.command);
+		degCommand = (EditText) findViewById(R.id.deg_edit);
+		degCommand.addTextChangedListener(new TextWatcher() {
+
+			@Override
+			public void afterTextChanged(Editable arg0) {
+				if(arg0.toString().length() != 0)
+					command.setText(String.format("%.6f", Math.toRadians(Double.parseDouble(arg0.toString()))));
+				else
+					command.setText("");
+			}
+
+			@Override
+			public void beforeTextChanged(CharSequence arg0, int arg1,
+					int arg2, int arg3) {}
+
+			@Override
+			public void onTextChanged(CharSequence arg0, int arg1, int arg2,
+					int arg3) {}
+			
+		});
 		sendCmdButton = (Button) findViewById(R.id.send_cmd);
 		sendCmdButton.setOnClickListener(new View.OnClickListener() {
 

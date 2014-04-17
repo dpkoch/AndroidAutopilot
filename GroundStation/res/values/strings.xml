@@ -4,8 +4,8 @@
     <string name="action_settings">Settings</string>
     <string name="label_destination">Destination:</string>
     <string name="hint_destination">Destination</string>
-    <string name="label_message">Message:</string>
     <string name="hint_command">Command</string>
+    <string name="label_deg">Deg</string>
     <string name="label_send">Send</string>
     <string name="label_p">P:</string>
     <string name="label_i">I:</string>
