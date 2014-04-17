@@ -193,7 +193,7 @@ public class MainActivity extends IOIOActivity {
 		// pid loops
 		rollToRudder = new PID(.9, 0, .1, 1);
 		headingToRoll = new PID(1.0, 0, 0, Math.toRadians(30));
-		pitchToElevator = new PID(1.0, 0, 0, Math.toRadians(30));
+		pitchToElevator = new PID(3.0, 0, 0.1, Math.toRadians(30));
 		altitudeToPitch = new PID(1.0, 0, 0, Math.toRadians(30));
 //		airspeedToThrottle = new PID(1.0, 0, 0, 1);
 		
@@ -366,11 +366,11 @@ public class MainActivity extends IOIOActivity {
 				rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(rollTrim + rollCommand, rollRawValue, dT, rollRate)));
 				break;
 			case 2:
-				elevatorOutput.setPulseWidth(PID.toServoCommand(pitchToElevator.control(pitchTrim + tuningCommand, pitch, dT, pitchRate)));
+				elevatorOutput.setPulseWidth(PID.toServoCommand(-pitchToElevator.control(pitchTrim + tuningCommand, pitch, dT, pitchRate)));
 				break;
 			case 3:
 				pitchCommand = altitudeToPitch.control(tuningCommand, altitudeTrim, dT);
-				elevatorOutput.setPulseWidth(PID.toServoCommand(pitchToElevator.control(pitchTrim + pitchCommand, pitch, dT, pitchRate)));
+				elevatorOutput.setPulseWidth(PID.toServoCommand(-pitchToElevator.control(pitchTrim + pitchCommand, pitch, dT, pitchRate)));
 				break;
 			case 4:
 				// throttleOutput.setPulseWidth(PID.toThrottleCommand(airspeedToThrottle.control(tuningCommand, airspeed, dT)));
@@ -380,7 +380,7 @@ public class MainActivity extends IOIOActivity {
 				rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(rollTrim + rollCommand, rollRawValue, dT, rollRate)));
 
 				pitchCommand = altitudeToPitch.control(altitude, altitudeTrim, dT);
-				elevatorOutput.setPulseWidth(PID.toServoCommand(pitchToElevator.control(pitchTrim + pitchCommand, pitch, dT, pitchRate)));
+				elevatorOutput.setPulseWidth(PID.toServoCommand(-pitchToElevator.control(pitchTrim + pitchCommand, pitch, dT, pitchRate)));
 
 				// throttleOutput.setPulseWidth(PID.toThrottleCommand(airspeedToThrottle.control(airspeedTrim, airspeed, dT)));
 				break;
