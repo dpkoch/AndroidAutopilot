@@ -50,7 +50,7 @@ public class MainActivity extends Activity
 
 			@Override
 			public void afterTextChanged(Editable arg0) {
-				if(arg0.toString().length() != 0)
+				if(arg0.toString().length() != 0 && !arg0.toString().equals("-"))
 					command.setText(String.format("%.6f", Math.toRadians(Double.parseDouble(arg0.toString()))));
 				else
 					command.setText("");

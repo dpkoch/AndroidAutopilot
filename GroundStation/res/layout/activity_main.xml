@@ -33,7 +33,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="0.58"
             android:hint="@string/hint_command"
-            android:inputType="numberDecimal"
+            android:inputType="numberSigned|numberDecimal"
             android:maxLines="10"
             android:scrollbars="vertical" />
 
@@ -61,7 +61,7 @@
 	        android:layout_height="wrap_content"
 	        android:layout_weight="0.15"
 	        android:ems="10"
-	        android:inputType="numberDecimal" />
+	        android:inputType="numberSigned|numberDecimal" />
 
 	</LinearLayout>
 

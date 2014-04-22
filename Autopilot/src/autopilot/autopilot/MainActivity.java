@@ -192,8 +192,8 @@ public class MainActivity extends IOIOActivity {
 		
 		// pid loops
 		rollToRudder = new PID(.9, 0, .1, 1);
-		headingToRoll = new PID(1.0, 0, 0, Math.toRadians(30));
-		pitchToElevator = new PID(3.0, 0, 0.1, Math.toRadians(30));
+		headingToRoll = new PID(1.0, 0, 0, Math.toRadians(25));
+		pitchToElevator = new PID(5.5, 0, 0.2, 1);
 		altitudeToPitch = new PID(1.0, 0, 0, Math.toRadians(30));
 //		airspeedToThrottle = new PID(1.0, 0, 0, 1);
 		
@@ -280,9 +280,10 @@ public class MainActivity extends IOIOActivity {
 		
 		// gps
 		homeSet = false;
-        
-        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+        if(currentlyTuning != 0 && currentlyTuning != 2) {
+	        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+	        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+        }
 	}
 	
 	@Override
@@ -342,9 +343,9 @@ public class MainActivity extends IOIOActivity {
 		 */
 		@Override
 		protected void setup() throws ConnectionLostException {
-			throttleOutput = ioio_.openPwmOutput(10, 100);
+			//throttleOutput = ioio_.openPwmOutput(10, 100);
 			elevatorOutput = ioio_.openPwmOutput(11, 100);
-			rudderOutput = ioio_.openPwmOutput(12, 100);
+			rudderOutput = ioio_.openPwmOutput(10, 100);
 		}
 		
 		/**
@@ -360,6 +361,7 @@ public class MainActivity extends IOIOActivity {
 			{
 			case 0:
 				rudderOutput.setPulseWidth(PID.toServoCommand(rollToRudder.control(rollTrim + tuningCommand, rollRawValue, dT, rollRate)));
+				//elevatorOutput.setPulseWidth(PID.toServoCommand(-pitchToElevator.control(pitchTrim + tuningCommand, pitch, dT, pitchRate)));
 				break;
 			case 1:
 				rollCommand = headingToRoll.control(tuningCommand, yawRawValue, dT);
@@ -562,7 +564,9 @@ public class MainActivity extends IOIOActivity {
 					case Communicator.WAYPOINT_MSG_TYPE:
 						double[] longiLati = new double[2];
 						Communicator.getWaypoint(data, longiLati);
-						convertLLtoNE(longiLati[0], longiLati[1], waypointNorth, waypointEast);
+						float[] results = convertLLtoNE(longiLati[0], longiLati[1]);
+						waypointNorth = results[0];
+						waypointEast = results[1];
 						Toast.makeText(getApplicationContext(), "waypoint received", Toast.LENGTH_LONG).show();
 						break;
 					case Communicator.TRIM_MSG_TYPE:
@@ -604,8 +608,11 @@ public class MainActivity extends IOIOActivity {
     			positionNorth = 0;
     			positionEast = 0;
     		}
-    		else
-    			convertLLtoNE(location.getLongitude(), location.getLatitude(), positionNorth, positionEast);
+    		else {
+    			float[] results = convertLLtoNE(location.getLongitude(), location.getLatitude());
+    			positionNorth = results[0];
+    			positionEast = results[1];
+    		}
     		
     		heading = Math.atan2(waypointEast-positionEast, waypointNorth-positionNorth);
     	}
@@ -620,17 +627,19 @@ public class MainActivity extends IOIOActivity {
 		public void onProviderEnabled(String provider) {}
     };
     
-    private void convertLLtoNE(double longitude, double latitude, float north, float east) {
+    private float[] convertLLtoNE(double longitude, double latitude) {
     	
-    	float[] results = new float[3];
-		Location.distanceBetween(homeLatitude, longitude, latitude, longitude, results);
+    	float[] calc = new float[3];
+    	float[] results = new float[2];
+		Location.distanceBetween(homeLatitude, longitude, latitude, longitude, calc);
 		if(latitude-homeLatitude < 0)
-			results[0] = -results[0];
-		north = results[0];
-		Location.distanceBetween(latitude, homeLongitude, latitude, longitude, results);
+			calc[0] = -calc[0];
+		results[0] = calc[0];
+		Location.distanceBetween(latitude, homeLongitude, latitude, longitude, calc);
 		if(longitude-homeLongitude < 0)
-			results[0] = -results[0];
-		east = results[0];
+			calc[0] = -calc[0];
+		results[1] = calc[0];
+		return results;
     }
     
 	//=========================================================================
