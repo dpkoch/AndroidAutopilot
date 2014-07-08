@@ -281,8 +281,11 @@ public class MainActivity extends IOIOActivity {
 		// gps
 		homeSet = false;
         
-        locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+		if (currentlyTuning != 0 && currentlyTuning != 2)
+		{
+			locationManager = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+			locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+		}
 	}
 	
 	@Override
@@ -342,9 +345,9 @@ public class MainActivity extends IOIOActivity {
 		 */
 		@Override
 		protected void setup() throws ConnectionLostException {
-			throttleOutput = ioio_.openPwmOutput(10, 100);
-			elevatorOutput = ioio_.openPwmOutput(11, 100);
-			rudderOutput = ioio_.openPwmOutput(12, 100);
+//			throttleOutput = ioio_.openPwmOutput(10, 100);
+			elevatorOutput = ioio_.openPwmOutput(10, 100);
+			rudderOutput = ioio_.openPwmOutput(11, 100);
 		}
 		
 		/**
