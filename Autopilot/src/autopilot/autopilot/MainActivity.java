@@ -1,5 +1,7 @@
 package autopilot.autopilot;
 
+import java.util.ArrayList;
+
 import ioio.lib.api.DigitalOutput;
 import ioio.lib.api.PwmOutput;
 import ioio.lib.api.exception.ConnectionLostException;
@@ -11,23 +13,20 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
+import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
 import android.telephony.SmsMessage;
-import android.util.Log;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
+import autopilot.opengl.CockpitDisplayStates;
 import autopilot.shared.Communicator;
 
 import com.jjoe64.graphview.GraphView.GraphViewData;
@@ -117,6 +116,12 @@ public class MainActivity extends IOIOActivity {
 	
 	private double headingCommand = 0;
 	
+	//-----------------------------------------------------------------------
+	// Graphics
+	//-----------------------------------------------------------------------
+	
+	//private GLSurfaceView cpGLView;
+	
 	//=========================================================================
 	// Android activity
 	//=========================================================================
@@ -139,6 +144,11 @@ public class MainActivity extends IOIOActivity {
 		filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY - 1);
 		registerReceiver(smsReceiver, filter);
 		
+		// cockpit graphics
+		//cpGLView = new CPGLSurfaceView(this);
+		//sv.addView(cpGLView);
+		//View inflated = vs.inflate();
+				
 		graphsButton = (ToggleButton) findViewById(R.id.graphs_button);
 		graphsButton.setOnCheckedChangeListener(new OnCheckedChangeListener() {
 			@Override
