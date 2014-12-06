@@ -1,8 +1,5 @@
 package autopilot.autopilot;
 
-import java.util.ArrayList;
-
-import ioio.lib.api.DigitalOutput;
 import ioio.lib.api.PwmOutput;
 import ioio.lib.api.exception.ConnectionLostException;
 import ioio.lib.util.BaseIOIOLooper;
@@ -15,7 +12,6 @@ import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.hardware.SensorManager;
 import android.location.LocationManager;
-import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.SystemClock;
@@ -23,12 +19,12 @@ import android.telephony.SmsMessage;
 import android.widget.CompoundButton;
 import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
-import autopilot.opengl.CockpitDisplayStates;
+import autopilot.opengl.CPGLRenderer;
+import autopilot.opengl.CPGLSurfaceView;
+import autopilot.opengl.CPDisplayStates;
 import autopilot.shared.Communicator;
-
 import com.jjoe64.graphview.GraphView.GraphViewData;
 import com.jjoe64.graphview.GraphViewSeries;
 import com.jjoe64.graphview.LineGraphView;
@@ -41,7 +37,7 @@ public class MainActivity extends IOIOActivity {
 	//=========================================================================
 	
 	private SensorEstimation senEst;
-	private CockpitDisplayStates cpDisplayStates;
+	private CPDisplayStates cpDisplayStates;
 	
 	//-----------------------------------------------------------------------
 	// UI elements
@@ -120,7 +116,7 @@ public class MainActivity extends IOIOActivity {
 	// Graphics
 	//-----------------------------------------------------------------------
 	
-	//private GLSurfaceView cpGLView;
+	private CPGLSurfaceView cpGLView;
 	
 	//=========================================================================
 	// Android activity
@@ -144,10 +140,15 @@ public class MainActivity extends IOIOActivity {
 		filter.setPriority(IntentFilter.SYSTEM_HIGH_PRIORITY - 1);
 		registerReceiver(smsReceiver, filter);
 		
+		senEst = new SensorEstimation(senEstContext, (SensorManager) getSystemService(Context.SENSOR_SERVICE),
+				(LocationManager) this.getSystemService(Context.LOCATION_SERVICE),
+				currentlyTuning);
+
+		cpDisplayStates = new CPDisplayStates(cpDisplayStatesContext);
+		
 		// cockpit graphics
-		//cpGLView = new CPGLSurfaceView(this);
-		//sv.addView(cpGLView);
-		//View inflated = vs.inflate();
+		cpGLView = (CPGLSurfaceView) findViewById(R.id.glSurfaceView);
+		cpGLView.setRenderer(new CPGLRenderer(this, cpDisplayStates));
 				
 		graphsButton = (ToggleButton) findViewById(R.id.graphs_button);
 		graphsButton.setOnCheckedChangeListener(new OnCheckedChangeListener() {
@@ -163,12 +164,6 @@ public class MainActivity extends IOIOActivity {
 				}
 			}
 		});
-		
-		senEst = new SensorEstimation(senEstContext, (SensorManager) getSystemService(Context.SENSOR_SERVICE),
-												(LocationManager) this.getSystemService(Context.LOCATION_SERVICE),
-												currentlyTuning);
-		
-		cpDisplayStates = new CockpitDisplayStates(cpDisplayStatesContext);
 		
         // graphs
         northGraphSeries = new GraphViewSeries(new GraphViewData[] {});
@@ -238,11 +233,11 @@ public class MainActivity extends IOIOActivity {
     	}
     };
     
-    private CockpitDisplayStates.Context cpDisplayStatesContext = new CockpitDisplayStates.Context() {
+    private CPDisplayStates.Context cpDisplayStatesContext = new CPDisplayStates.Context() {
 		
 		@Override
 		public float[] onRequestStates() {
-			float[] states = {(float)senEst.pitch, (float)senEst.rollRawValue, 10, (float)senEst.yawRawValue, (float)senEst.altitude};
+			float[] states = {(float)senEst.pitch, (float)senEst.rollRawValue, 10, (float)senEst.yawRawValue, (float)(senEst.altitude + senEst.altitude0)};
 			return states;
 		}
 	};

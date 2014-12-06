@@ -5,27 +5,32 @@ import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
 
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.opengl.GLES20;
-import android.opengl.GLUtils;
 import autopilot.autopilot.R;
 
 public class Panel {
 	
-	private final Context mActivityContext;
+	//private final Context mActivityContext;
 	
 	private final String vertexShaderCode =
-		    "attribute vec4 vPosition;" +
+			"uniform mat4 uMVPMatrix;" +
+			"attribute vec4 vPosition;" +
+		    "varying vec3 vPosVarying;" + 
 		    "void main() {" +
-		    "  gl_Position = vPosition;" +
+		    "  vPosVarying = vec3(vPosition);" +
+		    "  gl_Position = uMVPMatrix * vPosition;" +
 		    "}";
 
     private final String fragmentShaderCode =
             "precision mediump float;" +
             "uniform vec4 vColor;" +
+            "uniform sampler2D uTexture;" +  
+            "varying vec3 vPosVarying;" +  
             "void main() {" +
-            "  gl_FragColor = vColor;" +
+            "  float texX = (vPosVarying[0] + 1.5)/3.0;" +
+            "  float texY = (1.0 - vPosVarying[1])/2.0;" +
+            "  vec2 texCoord = vec2(texX,texY);" + 
+            "  gl_FragColor = texture2D(uTexture, texCoord);" +
             "}";
 
 	private final FloatBuffer vertexBuffer;
@@ -34,7 +39,8 @@ public class Panel {
     private int mPositionHandle;
     private int mColorHandle;
     private int mMVPMatrixHandle;
-    private int mtextureHandle;
+    private int mTextureDataHandle;
+	private int mTextureUniformHandle;
     
  // number of coordinates per vertex in this array
     static final int COORDS_PER_VERTEX = 3;
@@ -48,7 +54,7 @@ public class Panel {
     float color[] = { 0.63671875f, 0.76953125f, 0.22265625f, 1.0f };
 
     public Panel(final Context context) {
-    	mActivityContext = context;
+    	//mActivityContext = context;
     	
         // initialize vertex byte buffer for shape coordinates
         ByteBuffer bb = ByteBuffer.allocateDirect(
@@ -83,9 +89,11 @@ public class Panel {
         GLES20.glAttachShader(mProgram, vertexShader);   // add the vertex shader to program
         GLES20.glAttachShader(mProgram, fragmentShader); // add the fragment shader to program
         GLES20.glLinkProgram(mProgram);                  // create OpenGL program executables
+        
+        mTextureDataHandle = TextureHelper.loadTexture(context, R.drawable.exampleimage);
     }
     
-    public void draw() {
+    public void draw(float[] mvpMatrix) {
         // Add program to OpenGL ES environment
         GLES20.glUseProgram(mProgram);
 
@@ -102,9 +110,28 @@ public class Panel {
 
         // get handle to fragment shader's vColor member
         mColorHandle = GLES20.glGetUniformLocation(mProgram, "vColor");
-
+        
         // Set color for drawing the triangle
         GLES20.glUniform4fv(mColorHandle, 1, color, 0);
+        
+        // get handle to shape's transformation matrix
+        mMVPMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix");
+        //CPGLRenderer.checkGlError("glGetUniformLocation");
+
+        // Apply the projection and view transformation
+        GLES20.glUniformMatrix4fv(mMVPMatrixHandle, 1, false, mvpMatrix, 0);
+        //CPGLRenderer.checkGlError("glUniformMatrix4fv");
+        
+        mTextureUniformHandle = GLES20.glGetUniformLocation(mProgram, "uTexture");
+     
+        // Set the active texture unit to texture unit 0.
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        
+        // Bind the texture to this unit.
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureDataHandle);
+        
+        // Tell the texture uniform sampler to use this texture in the shader by binding to texture unit 0.
+        GLES20.glUniform1i(mTextureUniformHandle, 0);
 
         // Draw the triangle
         //GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, vertexCount);
@@ -114,7 +141,7 @@ public class Panel {
         GLES20.glDisableVertexAttribArray(mPositionHandle);
     }
 
-    public void loadTexture() {
+    /*public void loadTexture() {
     	
     	final int[] textureHandle = new int[1];
     	GLES20.glGenTextures(1, textureHandle, 0);
@@ -138,6 +165,6 @@ public class Panel {
         // Recycle the bitmap, since its data has been loaded into OpenGL.
         bitmap.recycle();
     	
-        mtextureHandle = textureHandle[0];
-    }
+        mTextureDataHandle = textureHandle[0];
+    }*/
 }

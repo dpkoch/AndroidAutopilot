@@ -1,52 +1,54 @@
 package autopilot.opengl;
 
-public class CockpitDisplayStates {
+public class CPDisplayStates {
 	
 	public interface Context {
 		
-		public float[] onRequestStates();  //roll, pitch, airspeed, heading, altitude
+		public float[] onRequestStates();  //pitch, roll, airspeed, heading, altitude
 	}
 
 	private Context context;
 	private float[] state;
 	private float FT_M = (float)3.28084;
-	private float MAXSPEEDAng = (float) (2*Math.PI - Math.PI/6); //rad
+	private float MAXSPEEDAng = (float) (2*Math.PI - Math.PI/12); //rad
 	private float MAXDisplayedSPEED = 100; //knots
-	private float MINSPEEDAng = (float) (Math.PI/6); //rad
+	private float MINSPEEDAng = (float) (Math.PI/9); //rad
 	private float MINDisplayedSPEED = 5; //knots
 	private float KNOTS_MpS = (float)0.514;
-	private float COTurnAng = (float) (Math.PI/8); //rad
+	private float COTurnAng = (float) (Math.PI/9); //rad
 	
 
-	public CockpitDisplayStates(Context context) {
+	public CPDisplayStates(Context context) {
 		
 		this.context = context;
 	}
 	
 	// returns angles from straight and level (up and clockwise are positive rotations but face spins opposite)
-	public void attIndFaceAng(float pitch, float roll) {
+	public float[] attIndFaceAng() {
 		
-		this.state = context.onRequestStates();
-		
-		pitch = -state[0];
-		roll = -state[1];
+		//this.state = context.onRequestStates();
+		float angles[] = new float[2]; //pitch, roll
+		angles[0] = -state[0];
+		angles[1] = -state[1];
+		return angles;
 	}
 	
-	// returns angles from vertical (rad)
-	public void altIndNeedleAng(float thousand, float unit) {
-		
+	// returns angles from vertical (deg) 
+	public float[] altIndNeedleAng() {
+		float angles[] = new float[2]; //unit, thousand
 		float altitude = state[4] * FT_M;
-		thousand = (float) (altitude / 10000 * 2 * Math.PI);
-		unit = (float) ((altitude % 1000) / 1000 * 2 * Math.PI);
+		angles[1] = new Float(Math.toDegrees(altitude / 10000 * 2 * Math.PI));
+		angles[0] = new Float(Math.toDegrees((altitude % 1000) / 1000 * 2 * Math.PI));
+		return angles;
 	}
 	
-	// returns angles from vertical between MINSPEEDAng to MAXSPEEDAng (rad)
+	// returns angles from vertical between MINSPEEDAng to MAXSPEEDAng (deg)
 	public float airSpeedIndNeedleAng() {
-		
+		this.state = context.onRequestStates();
 		float speedRange = MAXDisplayedSPEED - MINDisplayedSPEED;
 		float speed = state[2] * KNOTS_MpS; //knots
 		float angleRange = MAXSPEEDAng - MINSPEEDAng;
-		return (float)(MINSPEEDAng + speed/(speedRange) * angleRange);
+		return (float)Math.toDegrees(MINSPEEDAng + speed/(speedRange) * angleRange);
 	}
 	
 	// returns angles from vertical (face rotates opposite of heading angle

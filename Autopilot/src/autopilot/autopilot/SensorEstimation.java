@@ -68,7 +68,7 @@ public class SensorEstimation {
 	private float barometer0 = SensorManager.PRESSURE_STANDARD_ATMOSPHERE;
 	private float barometerRaw = SensorManager.PRESSURE_STANDARD_ATMOSPHERE; // hPa
 	private float barometerLPF = SensorManager.PRESSURE_STANDARD_ATMOSPHERE; // hPa
-	private double altitude0;
+	public double altitude0;
 	public double altitude = 0; // m
 	
 	// oriantation
