@@ -148,7 +148,7 @@ public class MainActivity extends IOIOActivity {
 		
 		// cockpit graphics
 		cpGLView = (CPGLSurfaceView) findViewById(R.id.glSurfaceView);
-		cpGLView.setRenderer(new CPGLRenderer(this, cpDisplayStates));
+		cpGLView.setCPRenderer(new CPGLRenderer(this, cpDisplayStates));
 				
 		graphsButton = (ToggleButton) findViewById(R.id.graphs_button);
 		graphsButton.setOnCheckedChangeListener(new OnCheckedChangeListener() {
@@ -237,7 +237,8 @@ public class MainActivity extends IOIOActivity {
 		
 		@Override
 		public float[] onRequestStates() {
-			float[] states = {(float)senEst.pitch, (float)senEst.rollRawValue, 10, (float)senEst.yawRawValue, (float)(senEst.altitude + senEst.altitude0)};
+			float[] states = {(float)senEst.pitch, (float)senEst.rollRawValue, 
+								10, (float)senEst.yawRawValue, (float)(senEst.altitude + senEst.altitude0)};
 			return states;
 		}
 	};

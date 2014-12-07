@@ -10,7 +10,7 @@ import android.content.Context;
 import android.opengl.GLES20;
 import autopilot.autopilot.R;
 
-public class Circle {
+public class Sphere {
 
 	private final String vertexShaderCode =
             "uniform mat4 uMVPMatrix;" +
@@ -27,8 +27,8 @@ public class Circle {
             "uniform sampler2D uTexture;" +  
             "varying vec3 vPosVarying;" +  
             "void main() {" +
-            "  float texX = (-vPosVarying[0] + 1.5)/3.0;" +
-            "  float texY = (1.5 - vPosVarying[1])/2.0;" +
+            "  float texX = (vPosVarying[0] + 1.5)/3.0;" +
+            "  float texY = (1.0 - vPosVarying[1])/2.0;" +
             "  vec2 texCoord = vec2(texX,texY);" + 
             "  gl_FragColor = texture2D(uTexture, texCoord);" +
             "}";
@@ -44,7 +44,7 @@ public class Circle {
 
     // number of coordinates per vertex in this array
     private final int COORDS_PER_VERTEX = 3;
-    private float circleCoords[];
+    private float sphereCoords[];
     private short drawOrder[];
 
     private final int vertexStride = COORDS_PER_VERTEX * 4; // 4 bytes per vertex
@@ -53,17 +53,18 @@ public class Circle {
 
     /**
      * Sets up the drawing object data for use in an OpenGL ES context.
+     * @param context 
      * @param rad 
      */
-    public Circle(float radius, Context context) {
-    	createCircleCoord(radius);
+    public Sphere(float radius, Context context) {
+    	createSphereCoord(radius);
         // initialize vertex byte buffer for shape coordinates
         ByteBuffer bb = ByteBuffer.allocateDirect(
         // (# of coordinate values * 4 bytes per float)
-                circleCoords.length * 4);
+                sphereCoords.length * 4);
         bb.order(ByteOrder.nativeOrder());
         vertexBuffer = bb.asFloatBuffer();
-        vertexBuffer.put(circleCoords);
+        vertexBuffer.put(sphereCoords);
         vertexBuffer.position(0);
 
         // initialize byte buffer for the draw list
@@ -88,7 +89,7 @@ public class Circle {
         GLES20.glAttachShader(mProgram, fragmentShader); // add the fragment shader to program
         GLES20.glLinkProgram(mProgram);                  // create OpenGL program executables
         
-        mTextureDataHandle = TextureHelper.loadTexture(context, R.drawable.examplecp);
+        mTextureDataHandle = TextureHelper.loadTexture(context, R.drawable.exampleimage);
     }
 
     /**
@@ -137,7 +138,7 @@ public class Circle {
         
         // Tell the texture uniform sampler to use this texture in the shader by binding to texture unit 0.
         GLES20.glUniform1i(mTextureUniformHandle, 0);
-
+        
         // Draw the circle
         GLES20.glDrawElements(
                 GLES20.GL_TRIANGLES, drawOrder.length,
@@ -147,27 +148,42 @@ public class Circle {
         GLES20.glDisableVertexAttribArray(mPositionHandle);
     }
     
-    private void createCircleCoord(float radius) {
+    private void createSphereCoord(float radius) {
     	
     	int slices = 20;
+    	int cuts = 10;
     	ArrayList<Float> coords = new ArrayList<Float>();
     	ArrayList<Short> order = new ArrayList<Short>();
-    	coords.add(0.0f); coords.add(0.0f); coords.add(0.0f);
-    	for(int i=0;i<=slices;i++) {
-        	float theta = (float)(i / (float)slices * 2.0 * Math.PI);
-        	float x = radius * (float)Math.cos(theta);
-        	float y = radius * (float)Math.sin(theta);
-        	float z = 0.0f;
-        	coords.add(x); coords.add(y); coords.add(z);
-        }
-    	for(int i=0;i<slices;i++) {	
-        	order.add((short)0); order.add((short)(i+1)); order.add((short)(i+2));
-        }
     	
-    	circleCoords = new float[coords.size()];
+    	for(int j=0;j<=cuts;j++)
+    	{
+    		float phi = (float)((j * Math.PI /(float)cuts) - (Math.PI/2.0f));
+    		float y = (float) (radius*Math.sin(phi));
+    		double innerRad = radius*Math.cos(phi);
+	    	for(int i=0;i<=slices;i++) {
+	        	float theta = (float)(i / (float)slices * 2.0 * Math.PI);
+	        	float x = (float) (innerRad * Math.sin(theta));
+	        	float z = (float) (innerRad * Math.cos(theta));
+	        	coords.add(x); coords.add(y); coords.add(z);
+	        }
+    	}
+    	for(int j=0;j<cuts;j++)
+    	{
+	    	for(int i=0;i<slices;i++) {	
+	        	order.add((short)((slices+1)*j + i)); 
+	        	order.add((short)((slices+1)*j + i + 1)); 
+	        	order.add((short)((slices+1)*(j+1) + i));
+	        	
+	        	order.add((short)((slices+1)*j + i + 1)); 
+	        	order.add((short)((slices+1)*(j+1) + i)); 
+	        	order.add((short)((slices+1)*(j+1) + i + 1));
+	        }
+    	}
+    	
+    	sphereCoords = new float[coords.size()];
         drawOrder = new short[order.size()];
         for(int i=0;i<coords.size();i++) {
-        	circleCoords[i] = coords.get(i).floatValue();
+        	sphereCoords[i] = coords.get(i).floatValue();
         }
         
         for(int i=0;i<order.size();i++) {

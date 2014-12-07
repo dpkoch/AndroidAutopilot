@@ -27,7 +27,7 @@ public class Panel {
             "uniform sampler2D uTexture;" +  
             "varying vec3 vPosVarying;" +  
             "void main() {" +
-            "  float texX = (vPosVarying[0] + 1.5)/3.0;" +
+            "  float texX = (-vPosVarying[0] + 1.5)/3.0;" +
             "  float texY = (1.0 - vPosVarying[1])/2.0;" +
             "  vec2 texCoord = vec2(texX,texY);" + 
             "  gl_FragColor = texture2D(uTexture, texCoord);" +
@@ -90,7 +90,7 @@ public class Panel {
         GLES20.glAttachShader(mProgram, fragmentShader); // add the fragment shader to program
         GLES20.glLinkProgram(mProgram);                  // create OpenGL program executables
         
-        mTextureDataHandle = TextureHelper.loadTexture(context, R.drawable.exampleimage);
+        mTextureDataHandle = TextureHelper.loadTexture(context, R.drawable.examplecp);
     }
     
     public void draw(float[] mvpMatrix) {

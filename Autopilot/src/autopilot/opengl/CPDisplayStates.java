@@ -16,10 +16,16 @@ public class CPDisplayStates {
 	private float MINDisplayedSPEED = 5; //knots
 	private float KNOTS_MpS = (float)0.514;
 	private float COTurnAng = (float) (Math.PI/9); //rad
-	
+	// --- vSpeed dirty derivative ---
+	private double mdT;
+	private long mTime_d1;
+	private float mAlt_d1;
+	private float mAltDerivative = 0;
+	private final float TAU = 2;
+	private float altZero = 0;
 
 	public CPDisplayStates(Context context) {
-		
+		mTime_d1 = System.currentTimeMillis();
 		this.context = context;
 	}
 	
@@ -28,8 +34,8 @@ public class CPDisplayStates {
 		
 		//this.state = context.onRequestStates();
 		float angles[] = new float[2]; //pitch, roll
-		angles[0] = -state[0];
-		angles[1] = -state[1];
+		angles[0] = (float) Math.toDegrees(state[0]);
+		angles[1] = (float) -Math.toDegrees(state[1]);
 		return angles;
 	}
 	
@@ -54,13 +60,23 @@ public class CPDisplayStates {
 	// returns angles from vertical (face rotates opposite of heading angle
 	public float headingIndFaceAng() {
 		
-		return -state[3];
+		return (float) -Math.toDegrees(state[3]);
 	}
 	
-	// returns angle from left horizontal (rad)
+	// returns angle from left horizontal (deg)
 	public float vSpeedIndNeedleAng() {
 		// todo: need to do a dirty derivative of altitude to get this
-		return 0;
+		long time = System.currentTimeMillis();
+		mdT = (time - mTime_d1)/1000;
+		mTime_d1 = time;
+		float altitude = state[4] * FT_M;
+		mAltDerivative = (float)((2*TAU-mdT)/(2*TAU+mdT)*mAltDerivative + (2/(2*TAU+mdT))*(altitude - mAlt_d1));
+		mAlt_d1 = altitude;
+		//return mAltDerivative*60f*90f/10f;
+		//For demo show change in altitude instead of altitude rate
+		if(altZero == 0)
+			altZero = altitude;
+		return (altitude - altZero)*90f/10f;
 	}
 	
 	// returns angle from vertical (rad)

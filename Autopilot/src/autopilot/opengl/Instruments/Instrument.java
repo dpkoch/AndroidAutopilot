@@ -31,8 +31,8 @@ public abstract class Instrument {
             "  gl_FragColor = vColor;" +
             "}";
     
-    private final FloatBuffer vertexBuffer;
-    private final ShortBuffer drawListBuffer;
+    private FloatBuffer vertexBuffer;
+    private ShortBuffer drawListBuffer;
     private final int mProgram;
     private int mPositionHandle;
     private int mColorHandle;
@@ -40,13 +40,13 @@ public abstract class Instrument {
 
     // number of coordinates per vertex in this array
     static final int COORDS_PER_VERTEX = 3;
-    static float needleCoords[] = {
+    protected float needleCoords[] = {
              0.0f,  0.25f, 0.0f,   // point
              0.02f, 0.0f, 0.0f,   // left
             -0.02f, 0.0f, 0.0f,   // right
              0.0f, -0.02f, 0.0f }; // blunt
 
-    private final short drawOrder[] = { 0, 1, 2, 1, 2, 3 }; // order to draw vertices
+    protected short drawOrder[] = { 0, 1, 2, 1, 2, 3 }; // order to draw vertices
 
     private final int vertexStride = COORDS_PER_VERTEX * 4; // 4 bytes per vertex
 
@@ -54,7 +54,11 @@ public abstract class Instrument {
 	
 	public Instrument(CPDisplayStates cpDS) {
 		mCpDS = cpDS;
-		
+		mProgram = GLES20.glCreateProgram();             // create empty OpenGL Program
+		makeBuffers();                 // create OpenGL program executables
+	}
+	
+	protected void makeBuffers() {
 		ByteBuffer bb = ByteBuffer.allocateDirect(needleCoords.length * 4);
         bb.order(ByteOrder.nativeOrder());
         vertexBuffer = bb.asFloatBuffer();
@@ -78,7 +82,6 @@ public abstract class Instrument {
                 GLES20.GL_FRAGMENT_SHADER,
                 fragmentShaderCode);
 
-        mProgram = GLES20.glCreateProgram();             // create empty OpenGL Program
         GLES20.glAttachShader(mProgram, vertexShader);   // add the vertex shader to program
         GLES20.glAttachShader(mProgram, fragmentShader); // add the fragment shader to program
         GLES20.glLinkProgram(mProgram);                  // create OpenGL program executables

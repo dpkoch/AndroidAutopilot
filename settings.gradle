@@ -1,6 +1,0 @@
-include ':App-IOIO0503:IOIOLibAccessory'
-include ':AndroidAutopilot:AutopilotLibShared'
-include ':App-IOIO0503:IOIOLibAndroidDevice'
-include ':AndroidAutopilot:Autopilot'
-include ':AndroidAutopilot:GroundStation'
-include ':App-IOIO0503:IOIOLib:target:android'
